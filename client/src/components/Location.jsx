@@ -1,9 +1,7 @@
 import { useGeolocation } from "../hooks/useGeolocation";
 
 function Location() {
-  const { getPosition, isLoading, position } = useGeolocation();
-
- 
+  const { getPosition, isLoading, position,status } = useGeolocation();
 
   return (
     <div className="w-full h-screen flex items-center justify-center">
@@ -21,6 +19,12 @@ function Location() {
           <p className="text-white">
             Latitude: {position.lat} <br />
             Longitude: {position.lng}
+          </p>
+        )}
+        {status && (
+          <p className="text-white">
+            Status: {status.inside ? "🏠 Inside" : "🚶 Outside"} <br />
+            Distance: {status.distance?.toFixed(2)} m
           </p>
         )}
       </div>
