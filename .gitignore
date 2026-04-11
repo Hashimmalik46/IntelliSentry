@@ -1,24 +1,99 @@
-# Logs
-logs
+# =========================
+# 🔹 Python (Backend)
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment variables
+.env
+.env.*
+
+# Logs & DB
 *.log
+*.sqlite3
+
+# Testing / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+
+# =========================
+# 🔹 Frontend (React / Vite / Node)
+# =========================
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Build outputs
+dist/
+build/
+.next/
+out/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Vite
+.vite/
+
+
+# =========================
+# 🔹 General / Project-wide
+# =========================
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
 .DS_Store
-*.suo
-.ntvs
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
+
+# Temporary files
+*.swp
+*.swo
+
+# Misc
+*.tmp
+*.bak
+*.pid
