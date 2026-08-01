@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Users, Search, Filter, CheckCircle2, XCircle, Home, LogOut, Building, ShieldAlert, Mail, Phone, Eye, X } from 'lucide-react';
+import { Users, Search, Filter, CheckCircle2, XCircle, Home, LogOut, Building, ShieldAlert, Mail, Phone, Eye, X, UserCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const StudentDirectory = () => {
@@ -17,7 +17,7 @@ const StudentDirectory = () => {
       // 1. Fetch Students strictly from 'students' table in Supabase
       const { data: studentsData } = await supabase
         .from('students')
-        .select('*')
+        .select('id, user_id, name, email, phone, registration_number, role, status, created_at')
         .order('created_at', { ascending: false });
 
       // Strictly filter out admins and keep ONLY registered student accounts
@@ -70,21 +70,26 @@ const StudentDirectory = () => {
         const lastMovement = studentLatestMovement[regKey] || 'Entry';
         const isOutside = lastMovement.toLowerCase().includes('exit');
         const housing = housingMap[regKey] || {};
+        const isExplicitActive = s.status && String(s.status).toUpperCase() === 'ACTIVE';
+        const hasCompleteHousing = housing.hostel_name && housing.hostel_name !== 'Pending Assignment';
+        const isCompleted = isExplicitActive || hasCompleteHousing;
 
         return {
           id: s.id,
           user_id: s.user_id,
           name: s.name || s.email?.split('@')[0] || 'Student',
           email: s.email,
-          registration_number: s.registration_number || 'N/A',
+          registration_number: s.registration_number || 'Unassigned',
+          status: isCompleted ? 'ACTIVE' : 'PENDING',
           enrolled: enrolledSet.has(regKey) || (s.user_id && enrolledSet.has(s.user_id)),
           locationStatus: isOutside ? 'OUTSIDE' : 'INSIDE',
-          hostel: housing.hostel_name || 'Habba Khatoon Hostel',
+          hostel: housing.hostel_name || 'Pending Assignment',
           room: housing.room_number || 'Unassigned',
-          floor: housing.floor || '1st Floor',
-          warden: housing.warden_name || 'Dr. Shazia',
-          parent_name: housing.parent_name || 'Farooq Ahmad Malik',
-          parent_phone: housing.parent_phone || '+919876543210'
+          floor: housing.floor || 'N/A',
+          warden: housing.warden_name || 'Pending Assignment',
+          student_phone: s.phone || 'Not Provided',
+          parent_name: housing.parent_name || 'Unassigned',
+          parent_phone: housing.parent_phone || 'Unassigned'
         };
       });
 
@@ -116,6 +121,10 @@ const StudentDirectory = () => {
     return matchesSearch && matchesLocation && matchesHostel;
   });
 
+  const totalRegisteredCount = studentsList.length;
+  const activeOnboardedCount = studentsList.filter(s => s.status === 'ACTIVE').length;
+  const faceBiometricsCount = studentsList.filter(s => s.enrolled).length;
+
   const headerRight = (
     <div className="flex items-center gap-3">
       <span className="px-3.5 py-1 bg-teal-100 text-teal-900 border border-teal-300 text-xs font-extrabold rounded-full uppercase tracking-wider font-heading shadow-xs">
@@ -134,6 +143,57 @@ const StudentDirectory = () => {
             <h2 className="text-2xl font-bold text-gray-900 font-heading">Student Biometric & Housing Directory</h2>
             <p className="text-xs text-gray-500 font-body">Master repository of enrolled students, premises location, and housing details</p>
           </div>
+        </div>
+
+        {/* Directory Metrics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {loading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between animate-pulse">
+                <div className="space-y-2">
+                  <div className="w-28 h-2.5 bg-slate-200 rounded-md"></div>
+                  <div className="w-16 h-7 bg-slate-200 rounded-md"></div>
+                  <div className="w-24 h-2.5 bg-slate-200 rounded-md"></div>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-slate-200"></div>
+              </div>
+            ))
+          ) : (
+            <>
+              <div className="bg-white p-5 rounded-2xl border border-teal-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider font-heading">Total Registered Students</p>
+                  <h3 className="text-2xl font-extrabold text-teal-900 mt-1 font-heading">{totalRegisteredCount}</h3>
+                  <p className="text-[11px] text-teal-600 font-semibold mt-0.5">Registered Student Roster</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-[#006a6a]">
+                  <Users className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider font-heading">Fully Onboarded</p>
+                  <h3 className="text-2xl font-extrabold text-emerald-700 mt-1 font-heading">{activeOnboardedCount}</h3>
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Active Housing Profiles</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider font-heading">Face Biometrics Active</p>
+                  <h3 className="text-2xl font-extrabold text-purple-900 mt-1 font-heading">{faceBiometricsCount}</h3>
+                  <p className="text-[11px] text-purple-600 font-semibold mt-0.5">Enrolled Profile Vectors</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Directory Table Container */}
@@ -301,10 +361,8 @@ const StudentDirectory = () => {
                   <span className="font-bold text-gray-900">{selectedStudent.email}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Campus Status:</span>
-                  <span className={`font-bold ${selectedStudent.locationStatus === 'OUTSIDE' ? 'text-amber-700' : 'text-emerald-700'}`}>
-                    {selectedStudent.locationStatus === 'OUTSIDE' ? 'Outside Premises 🟠' : 'Inside Premises 🟢'}
-                  </span>
+                  <span className="text-gray-500">Student Phone:</span>
+                  <span className="font-bold text-gray-900 font-mono">{selectedStudent.student_phone || 'Not Provided'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Biometric Profile:</span>

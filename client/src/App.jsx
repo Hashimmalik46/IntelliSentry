@@ -12,6 +12,8 @@ import AdminPasses from "./pages/AdminPasses";
 import StudentDirectory from "./pages/StudentDirectory";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+import AdminOnboarding from "./pages/AdminOnboarding";
+
 function App() {
   return (
     <BrowserRouter>
@@ -72,6 +74,14 @@ function App() {
           element={
             <ProtectedRoute requiredRole="admin">
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin-onboarding"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminOnboarding />
             </ProtectedRoute>
           }
         />

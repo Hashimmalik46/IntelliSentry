@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Users, Building, FileSpreadsheet, Shield, Search, ArrowUpRight, ArrowDownLeft, CheckCircle2, XCircle, RefreshCw, UserCheck, ShieldAlert, LogOut, Home, ArrowRight } from 'lucide-react';
+import { Users, Building, FileSpreadsheet, Shield, Search, ArrowUpRight, ArrowDownLeft, CheckCircle2, RefreshCw, UserCheck, ShieldAlert, LogOut, Home, ArrowRight, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,6 +13,7 @@ const AdminDashboard = () => {
     normalExitsCount: 0,
     homeExitsCount: 0,
     biometricsEnrolled: 0,
+    pendingSetupCount: 0,
   });
 
   const [attendanceLogs, setAttendanceLogs] = useState([]);
@@ -20,7 +21,7 @@ const AdminDashboard = () => {
   const [logFilter, setLogFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
-  // Fetch admin dashboard metrics with location strictly driven by attendance logs
+  // Fetch admin dashboard metrics and audit logs
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -35,11 +36,20 @@ const AdminDashboard = () => {
         return String(s.role).toLowerCase() !== 'admin';
       });
 
-      // 2. Fetch Biometric Embeddings
+      // 2. Fetch Housing Details
+      const { data: housingData } = await supabase.from('university_details').select('*');
+      const housingMap = {};
+      (housingData || []).forEach(h => {
+        if (h.registration_number) {
+          housingMap[h.registration_number.toUpperCase().trim()] = h;
+        }
+      });
+
+      // 3. Fetch Biometric Embeddings
       const { data: embeddingsData } = await supabase.from('face_embeddings').select('user_id, registration_number');
       const enrolledSet = new Set((embeddingsData || []).map(e => (e.registration_number || e.user_id || '').toUpperCase().trim()));
 
-      // 4. Fetch Active Approved Pass Requests (Source of truth for Home Exits)
+      // 4. Fetch Active Approved Pass Requests
       const { data: activePassesData } = await supabase
         .from('pass_requests')
         .select('id, user_id, registration_number, admin_status')
@@ -49,7 +59,7 @@ const AdminDashboard = () => {
         (activePassesData || []).map(p => (p.registration_number || p.user_id || '').toUpperCase().trim())
       );
 
-      // 3. Fetch Attendance Logs (Source of truth for movement logs)
+      // 5. Fetch Attendance Logs
       const { data: logsData } = await supabase
         .from('attendance_logs')
         .select('*')
@@ -92,7 +102,7 @@ const AdminDashboard = () => {
         }
       });
 
-      // Determine latest movement direction from attendance_logs for each student
+      // Determine latest movement direction
       const studentLatestMovement = {};
       for (const log of formattedLogs) {
         let key = (log.registration_number && log.registration_number !== 'N/A')
@@ -109,27 +119,35 @@ const AdminDashboard = () => {
       let normalExitsCount = 0;
       let homeExitsCount = 0;
       let biometricsEnrolled = 0;
+      let pendingSetupCount = 0;
 
       const todayStr = new Date().toDateString();
 
       studentRows.forEach(s => {
         const regKey = (s.registration_number && s.registration_number !== 'N/A')
           ? s.registration_number.toUpperCase().trim()
-          : (s.user_id || s.email);
+          : null;
 
-        const latestLog = studentLatestMovement[regKey];
+        const housing = regKey ? housingMap[regKey] : null;
+
+        const isExplicitActive = s.status && String(s.status).toUpperCase() === 'ACTIVE';
+        const hasHousing = housing && housing.hostel_name && housing.hostel_name !== 'Pending Assignment';
+
+        if (!isExplicitActive && !hasHousing) {
+          pendingSetupCount++;
+        }
+
+        const latestLog = regKey ? studentLatestMovement[regKey] : (s.user_id ? studentLatestMovement[s.user_id] : null);
         let isOutside = false;
         let exitCategory = null;
 
         if (latestLog && latestLog.type.toLowerCase().includes('exit')) {
           if (latestLog.exit_type === 'LEAVE_TO_HOME') {
-            // Only count as active Home Pass Exit if there is an active APPROVED pass in pass_requests
-            if (activeApprovedPassRegs.has(regKey) || (s.user_id && activeApprovedPassRegs.has(s.user_id))) {
+            if ((regKey && activeApprovedPassRegs.has(regKey)) || (s.user_id && activeApprovedPassRegs.has(s.user_id))) {
               isOutside = true;
               exitCategory = 'LEAVE_TO_HOME';
             }
           } else {
-            // Normal Local Exit: Check if log was created today
             const logDateStr = new Date(latestLog.raw_created_at).toDateString();
             if (logDateStr === todayStr) {
               isOutside = true;
@@ -149,7 +167,7 @@ const AdminDashboard = () => {
           insideCount++;
         }
 
-        if (enrolledSet.has(regKey) || (s.user_id && enrolledSet.has(s.user_id))) {
+        if ((regKey && enrolledSet.has(regKey)) || (s.user_id && enrolledSet.has(s.user_id))) {
           biometricsEnrolled++;
         }
       });
@@ -163,6 +181,7 @@ const AdminDashboard = () => {
         normalExitsCount: normalExitsCount,
         homeExitsCount: homeExitsCount,
         biometricsEnrolled: biometricsEnrolled,
+        pendingSetupCount: pendingSetupCount,
       });
     } catch (err) {
       console.warn("Admin data fetch notice:", err);
@@ -226,6 +245,18 @@ const AdminDashboard = () => {
           
           <div className="flex items-center gap-3">
             <button
+              onClick={() => navigate('/admin-onboarding')}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer font-heading"
+            >
+              <UserPlus className="w-4 h-4" /> Student Onboarding
+              {metrics.pendingSetupCount > 0 && (
+                <span className="bg-white text-amber-900 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-extrabold">
+                  {metrics.pendingSetupCount}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => navigate('/admin-students')}
               className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-800 text-xs font-bold rounded-xl border border-gray-200 shadow-xs transition-all flex items-center gap-2 cursor-pointer font-heading"
             >
@@ -242,10 +273,10 @@ const AdminDashboard = () => {
         </div>
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl">
           
           {loading ? (
-            [1, 2, 3, 4].map(i => (
+            [1, 2].map(i => (
               <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between animate-pulse">
                 <div className="space-y-2">
                   <div className="w-28 h-2.5 bg-slate-200 rounded-md"></div>
@@ -257,17 +288,6 @@ const AdminDashboard = () => {
             ))
           ) : (
             <>
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-heading">Total Enrolled Students</p>
-                  <h3 className="text-2xl font-extrabold text-gray-900 mt-1 font-heading">{metrics.totalStudents}</h3>
-                  <p className="text-[11px] text-gray-500 font-semibold mt-0.5">Active Student Roster</p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-[#006a6a]">
-                  <Users className="w-6 h-6" />
-                </div>
-              </div>
-
               <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider font-heading">Inside Premises</p>
@@ -289,17 +309,6 @@ const AdminDashboard = () => {
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
                   <LogOut className="w-6 h-6" />
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider font-heading">Face Biometrics Active</p>
-                  <h3 className="text-2xl font-extrabold text-purple-900 mt-1 font-heading">{metrics.biometricsEnrolled}</h3>
-                  <p className="text-[11px] text-purple-600 font-semibold mt-0.5">Enrolled Profile Vectors</p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-                  <UserCheck className="w-6 h-6" />
                 </div>
               </div>
             </>
@@ -415,3 +424,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

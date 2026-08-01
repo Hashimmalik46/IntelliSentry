@@ -27,10 +27,12 @@ const StudentDashboard = () => {
 
   const [exitAlert, setExitAlert] = useState(null);
 
+  const [hostelName, setHostelName] = useState('Pending Assignment');
+
   const [studentInfo, setStudentInfo] = useState({
-    name: 'Aida Student',
+    name: 'Student',
     email: '',
-    registration_number: 'REG-2024-001',
+    registration_number: 'N/A',
     id: null
   });
 
@@ -66,6 +68,22 @@ const StudentDashboard = () => {
               email: user.email,
               id: user.id
             }));
+          }
+
+          if (regNo && regNo !== 'N/A') {
+            const { data: uniDetails } = await supabase
+              .from('university_details')
+              .select('hostel_name')
+              .eq('registration_number', regNo)
+              .single();
+
+            if (uniDetails && uniDetails.hostel_name) {
+              setHostelName(uniDetails.hostel_name);
+            } else {
+              setHostelName('Pending Assignment');
+            }
+          } else {
+            setHostelName('Pending Assignment');
           }
         }
 
@@ -317,7 +335,7 @@ const StudentDashboard = () => {
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 font-heading">Current Entry Status</p>
                   <h4 className="text-base font-bold text-gray-900 font-heading">
-                    {isInside ? 'Habba Khatoon Hostel' : `Currently Off-Campus (${activeExitDetails.typeLabel})`}
+                    {isInside ? (hostelName || 'Pending Assignment') : `Currently Off-Campus (${activeExitDetails.typeLabel})`}
                   </h4>
                   <p className="text-[11px] text-gray-500 font-body">
                     {isInside 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, User, HelpCircle, Key, History, Users } from 'lucide-react';
+import { LayoutDashboard, User, HelpCircle, Key, History, Users, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const Sidebar = () => {
@@ -16,6 +16,7 @@ const Sidebar = () => {
   });
 
   const [pendingPassCount, setPendingPassCount] = useState(0);
+  const [pendingOnboardingCount, setPendingOnboardingCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -40,7 +41,7 @@ const Sidebar = () => {
             sessionStorage.setItem('user_role', studentRecord.role || 'student');
             sessionStorage.setItem('user_name', nameStr);
 
-            // Fetch pending pass requests count for Admin (exclude APPROVED, REJECTED, COMPLETED)
+            // Fetch pending pass requests & onboarding count for Admin
             if (adminStatus) {
               const { data: allReqs } = await supabase
                 .from('pass_requests')
@@ -51,6 +52,33 @@ const Sidebar = () => {
                   !['APPROVED', 'REJECTED', 'COMPLETED'].includes(r.admin_status)
                 ).length;
                 setPendingPassCount(count);
+              }
+
+              const { data: allStudents } = await supabase.from('students').select('status, registration_number, role');
+              const { data: allHousing } = await supabase.from('university_details').select('registration_number, hostel_name');
+
+              if (allStudents && isMounted) {
+                const housingMap = {};
+                (allHousing || []).forEach(h => {
+                  if (h.registration_number) {
+                    housingMap[h.registration_number.toUpperCase().trim()] = h;
+                  }
+                });
+
+                const pendingOnboard = allStudents.filter(s => {
+                  if (!s.role || String(s.role).toLowerCase() === 'admin') return false;
+
+                  const regKey = s.registration_number ? s.registration_number.toUpperCase().trim() : null;
+                  const housing = regKey ? (housingMap[regKey] || {}) : {};
+
+                  const isExplicitActive = s.status && String(s.status).toUpperCase() === 'ACTIVE';
+                  const hasCompleteHousing = housing.hostel_name && housing.hostel_name !== 'Pending Assignment';
+
+                  const isCompleted = isExplicitActive || hasCompleteHousing;
+                  return !isCompleted;
+                }).length;
+
+                setPendingOnboardingCount(pendingOnboard);
               }
             }
           }
@@ -70,7 +98,10 @@ const Sidebar = () => {
       path: isAdmin ? '/admin' : '/studentportal', 
       icon: LayoutDashboard 
     },
-    ...(isAdmin ? [{ name: 'Student Directory', path: '/admin-students', icon: Users }] : []),
+    ...(isAdmin ? [
+      { name: 'Student Onboarding', path: '/admin-onboarding', icon: UserPlus, badge: pendingOnboardingCount },
+      { name: 'Student Directory', path: '/admin-students', icon: Users }
+    ] : []),
     {
       name: isAdmin ? 'Pass Approvals' : 'Leave Passes',
       path: isAdmin ? '/admin-passes' : '/pass-requests',

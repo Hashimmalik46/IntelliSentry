@@ -50,8 +50,8 @@ function Signup() {
       const { error: uniError } = await supabase.from("university_details").upsert([
         {
           registration_number: regNo,
-          parent_name: "Parent Contact",
-          parent_phone: phone
+          parent_name: null,
+          parent_phone: null
         }
       ], { onConflict: 'registration_number' });
 

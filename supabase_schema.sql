@@ -9,10 +9,15 @@ CREATE TABLE IF NOT EXISTS public.students (
     user_id UUID UNIQUE,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
+    phone TEXT,
     registration_number TEXT UNIQUE,
     role TEXT DEFAULT 'student',
+    status TEXT DEFAULT 'PENDING',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDING';
 
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 
@@ -25,17 +30,18 @@ CREATE POLICY "Public Insert Students" ON public.students FOR INSERT WITH CHECK 
 CREATE POLICY "Public Update Students" ON public.students FOR UPDATE USING (true);
 
 -- Insert Sample Students
-INSERT INTO public.students (name, email, registration_number, role)
+INSERT INTO public.students (name, email, registration_number, role, status)
 VALUES 
-    ('Hashim Malik', 'hashim@iust.ac.in', 'IUST0123016837', 'student'),
-    ('Shazia Akram', 'shazia@iust.ac.in', 'IUST0123016852', 'student'),
-    ('Jahanzeb Khan', 'jahanzeb@iust.ac.in', 'IUST0123016910', 'student'),
-    ('Aamir Bhat', 'aamir@iust.ac.in', 'IUST0123016945', 'student')
+    ('Hashim Malik', 'hashim@iust.ac.in', 'IUST0123016837', 'student', 'ACTIVE'),
+    ('Shazia Akram', 'shazia@iust.ac.in', 'IUST0123016852', 'student', 'ACTIVE'),
+    ('Jahanzeb Khan', 'jahanzeb@iust.ac.in', 'IUST0123016910', 'student', 'ACTIVE'),
+    ('Aamir Bhat', 'aamir@iust.ac.in', 'IUST0123016945', 'student', 'ACTIVE')
 ON CONFLICT (email) 
 DO UPDATE SET 
     name = EXCLUDED.name,
     registration_number = EXCLUDED.registration_number,
-    role = EXCLUDED.role;
+    role = EXCLUDED.role,
+    status = EXCLUDED.status;
 
 
 -- 2. Create University Details Table

@@ -11,6 +11,7 @@
 - **Facial Biometric Embedding Authentication (DeepFace / OpenCV)**
 - **Automated Parent 2FA SMS Verification via Twilio**
 - **Split Exit Movement Control (Normal Exit vs Leave to Home)**
+- **Dedicated Admin Student Onboarding Portal & Profile Activation**
 - **Real-Time Admin Oversight & Master Access Audit Logs**
 
 ---
@@ -37,8 +38,10 @@ Stores registered student profile accounts.
 - `user_id` (UUID, Unique, linked to Supabase Auth)
 - `name` (TEXT)
 - `email` (TEXT, Unique)
+- `phone` (TEXT) -- Student's personal phone number entered at signup
 - `registration_number` (TEXT, Unique)
 - `role` (TEXT, default `'student'`)
+- `status` (TEXT, default `'PENDING'`) -- `'PENDING'` (Awaiting onboarding setup) or `'ACTIVE'`
 - `created_at` (TIMESTAMP)
 
 ### Table 2: `public.university_details`
@@ -121,9 +124,11 @@ CREATE TABLE IF NOT EXISTS public.students (
     email TEXT UNIQUE NOT NULL,
     registration_number TEXT UNIQUE,
     role TEXT DEFAULT 'student',
+    status TEXT DEFAULT 'PENDING',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDING';
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read Students" ON public.students;
 DROP POLICY IF EXISTS "Public Insert Students" ON public.students;
@@ -261,14 +266,29 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
    - System checks `public.pass_requests` for an `APPROVED` pass for this student. If missing/unapproved, exit is blocked.
    - Logs `attendance_logs` with `type = 'Exit (Leave to Home)'`, `exit_type = 'LEAVE_TO_HOME'`, `expected_return_time = '${return_date} at ${return_time}'`.
 
-### C. Automated & Biometric Return Completion & Active Exit Constraints
-1. **Prevent Multiple Active Exits**: Students marked `OUT` cannot initiate another exit scan until they log an `Entry` scan.
-2. **Prevent Multiple Pass Requests**: Students with an active or pending leave pass (`WAITING_FOR_PARENT`, `PENDING_ADMIN`, `APPROVED`) cannot submit another request. The **"Raise Leave Pass Request"** button is automatically disabled with an `"Active Request Exists"` status badge.
-3. **Biometric & Geofence Return Verification**: 
-   - Scanning `Enter into Hostel` (`Entry`) at the gate or clicking **Mark Returned** on `PassRequests.jsx` triggers the interactive `VerificationModal` (Geofence GPS + Biometric AI Face Match).
-   - Upon successful verification, logs an `Entry` scan into `attendance_logs`, marks `pass_requests` as `COMPLETED` (`Completed (Returned)`), and updates student presence back to **`IN HOSTEL` 🟢**.
-4. **Guaranteed Service-Role Row Deletion**:
-   - Student & Admin cancellations invoke Flask backend service-role route `DELETE /delete-pass-request/${id}` first to bypass RLS policies and forcefully purge rows from Supabase PostgreSQL database.
+### C. Dedicated Student Onboarding Portal (`AdminOnboarding.jsx`)
+1. **Registration Integration (`Signup.jsx`)**:
+   - New students register with Name, Email, Password, Registration Number, and Phone.
+   - The initial profile starts with `status = 'PENDING'` and `parent_name = null`, `parent_phone = null`.
+2. **Onboarding Roster (`AdminOnboarding.jsx`)**:
+   - Dedicated page at `/admin-onboarding`.
+   - Features tabbed navigation: **Pending Setup**, **Completed Profiles**, and **All Students**.
+   - Admins open the **Complete / Edit Profile** modal to assign:
+     - `reg_id` (Registration ID)
+     - `parent_name` & `parent_phone`
+     - `hostel_name`, `room_number`, `floor`, and `warden_name`
+   - On save, updates `public.students` (`status = 'ACTIVE'`, `registration_number`) and upserts `public.university_details`.
+   - **Cascade Synchronization**: If `registration_number` is changed by the admin, the system automatically updates linked records across `public.face_embeddings`, `public.pass_requests`, and `public.attendance_logs` by `user_id` so facial biometrics, gate movement logs, and pass histories stay linked.
+   - Cleans up old unassigned records so the student transitions cleanly to **Completed Profiles**.
+
+### D. Layout & Metric Distribution Across Admin Pages
+- **Campus Safety Dashboard ([AdminDashboard.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminDashboard.jsx))**:
+  - Focuses on real-time presence & movement audit: **Inside Premises** & **Outside Premises** (max-w-2xl container).
+  - Includes direct navigation shortcut button to **Student Onboarding**.
+- **Student Directory ([StudentDirectory.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/StudentDirectory.jsx))**:
+  - Displays roster management statistics with skeleton pulse loading: **Total Registered Students**, **Fully Onboarded**, and **Face Biometrics Active**.
+- **Student Onboarding Portal ([AdminOnboarding.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminOnboarding.jsx))**:
+  - Focuses on interactive student setup and profile completion.
 
 ---
 
@@ -279,13 +299,13 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 - **`server/face_service.py`**: DeepFace / OpenCV facial feature extraction & Supabase embedding vector handling.
 - **`server/sms_service.py`**: Twilio SMS notification & OTP sending functions.
 - **`server/test_parent_flow.py`**: Automated end-to-end Python test script.
-- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page featuring tabbed navigation (**Active/Pending Pass** vs **Pass History** vs **All Records**), multi-request prevention, biometric return verification, and guaranteed server service-role row deletion.
-- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal featuring tabbed segregation (**Current Pending Requests** vs **Request History** vs **All Records**) and administrative request row deletion.
-- **`client/src/pages/ActivityLogs.jsx`**: Personal student audit history with date range filtering (All Time, Past Week, Past Month, Past 3 Months).
-- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal, live campus location metrics, and CSV exporter.
-- **`client/src/components/Layout.jsx`**: Master container layout rendering topbar custom page headers and universal **Logout button** (redirecting to `/` landing route).
-- **`client/src/pages/Login.jsx` & `client/src/pages/Signup.jsx`**: User authentication portals featuring centered card layout, official `favicon.svg` brand badge header, and clean top notification banners.
-- **`client/src/components/Sidebar.jsx`**: Sidebar navigation featuring official `favicon.svg` logo badge, active role detection, and live pending pass counter badge (strictly counts active unfinalized pending requests).
+- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal and tabbed roster filters.
+- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal, live campus location metrics (**Inside/Outside Premises**), and CSV exporter.
+- **`client/src/pages/StudentDirectory.jsx`**: Master student directory with skeleton pulse loading and roster metrics (**Total Registered**, **Fully Onboarded**, **Face Biometrics Active**).
+- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page featuring tabbed navigation, multi-request prevention, biometric return verification, and server service-role deletion.
+- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal featuring tabbed segregation and administrative request row deletion.
+- **`client/src/pages/ActivityLogs.jsx`**: Personal student audit history with date range filtering.
+- **`client/src/components/Sidebar.jsx`**: Sidebar navigation featuring `UserPlus` Student Onboarding link, live badge counter, and official logo.
 - **`client/src/pages/Profile.jsx`**: Student face biometric registration & profile details.
 
 ---
