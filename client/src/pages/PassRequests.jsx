@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Key, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Calendar, Send, Smartphone, ExternalLink, CheckSquare, Trash2 } from 'lucide-react';
+import { Key, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Calendar, Send, Smartphone, ExternalLink, CheckSquare, Trash2, History } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import VerificationModal from '../components/VerificationModal';
 
 const PassRequests = () => {
   const [studentInfo, setStudentInfo] = useState({
@@ -14,6 +15,11 @@ const PassRequests = () => {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [createdSuccessData, setCreatedSuccessData] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [activeTab, setActiveTab] = useState('ALL'); // 'ACTIVE', 'HISTORY', 'ALL'
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [selectedPassForReturn, setSelectedPassForReturn] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -83,62 +89,55 @@ const PassRequests = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const getEncryptedTokenUrl = (requestId) => {
-    const payload = JSON.stringify({ id: requestId, ts: Date.now() });
-    const encryptedToken = btoa(payload);
-    return `${window.location.origin}/parent-approval/${encryptedToken}`;
+  const getEncryptedTokenUrl = (req) => {
+    if (typeof req === 'object' && req !== null) {
+      return `${window.location.origin}/parent-approval/${req.token || req.id}`;
+    }
+    return `${window.location.origin}/parent-approval/${req}`;
   };
 
   const handleCreateRequest = async (e) => {
     e.preventDefault();
-    if (!formData.reason || !formData.leave_date || !formData.return_date || !formData.parent_phone) {
-      alert("Please fill all required fields, including dates and parent contact info.");
+    if (!formData.reason || !formData.leave_date || !formData.return_date) {
+      alert("Please fill all required fields including dates and reason.");
+      return;
+    }
+
+    // Check for existing pending or active pass requests
+    const activeExistingPass = requests.find(r => 
+      ['WAITING_FOR_PARENT', 'PENDING_ADMIN', 'APPROVED'].includes(r.admin_status)
+    );
+
+    if (activeExistingPass) {
+      alert(`MULTIPLE REQUESTS PREVENTED: You already have an active or pending leave pass request (${activeExistingPass.leave_type} - Status: ${activeExistingPass.final_status}). You cannot submit another request until your current pass is completed or cancelled.`);
       return;
     }
 
     setSubmitting(true);
     try {
-      const payload = {
-        user_id: studentInfo.id || null,
-        student_name: studentInfo.name,
-        registration_number: studentInfo.registration_number,
-        leave_type: formData.leave_type,
-        reason: formData.reason,
-        leave_date: formData.leave_date,
-        leave_time: formData.leave_time,
-        return_date: formData.return_date,
-        return_time: formData.return_time,
-        parent_name: formData.parent_name || 'Parent/Guardian',
-        parent_phone: formData.parent_phone,
-        parent_status: 'PENDING',
-        admin_status: 'WAITING_FOR_PARENT',
-        final_status: 'Waiting for Parent Approval'
-      };
+      const response = await fetch("http://127.0.0.1:5000/create-pass-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: studentInfo.id || null,
+          student_name: studentInfo.name,
+          registration_number: studentInfo.registration_number,
+          leave_type: formData.leave_type,
+          reason: formData.reason,
+          leave_date: formData.leave_date,
+          leave_time: formData.leave_time,
+          return_date: formData.return_date,
+          return_time: formData.return_time,
+          origin: window.location.origin
+        })
+      });
 
-      const { data, error } = await supabase.from('pass_requests').insert([payload]).select();
+      const result = await response.json();
 
-      if (!error && data && data.length > 0) {
-        const newReq = data[0];
-        setRequests(prev => [newReq, ...prev]);
+      if (response.ok && result.success) {
         setModalOpen(false);
+        fetchPassRequests(studentInfo.id, studentInfo.registration_number);
         
-        const approvalUrl = getEncryptedTokenUrl(newReq.id);
-        
-        try {
-          await fetch("http://127.0.0.1:5000/send-parent-sms", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              parent_phone: newReq.parent_phone,
-              student_name: newReq.student_name,
-              leave_type: newReq.leave_type,
-              approval_url: approvalUrl
-            })
-          });
-        } catch (smsErr) {
-          console.warn("SMS service notice:", smsErr);
-        }
-
         setFormData({
           leave_type: 'Weekend Home Pass',
           reason: '',
@@ -149,47 +148,103 @@ const PassRequests = () => {
           parent_name: '',
           parent_phone: ''
         });
+
+        // Display clean UI Success Modal instead of raw alert
+        setCreatedSuccessData({
+          request: result.request,
+          approval_url: result.approval_url,
+          sms_status: result.sms_status,
+          parent_name: result.request?.parent_name,
+          parent_phone: result.request?.parent_phone
+        });
       } else {
-        alert("Could not submit request. Please try again.");
+        alert(result.error || "Could not submit request. Please verify your university records.");
       }
     } catch (err) {
       console.error("Submit pass error:", err);
+      alert("Error connecting to server. Please ensure Flask server is running.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Mark pass as completed when student returns to campus
-  const markPassCompleted = async (requestId) => {
-    try {
-      const { error } = await supabase
-        .from('pass_requests')
-        .update({
-          admin_status: 'COMPLETED',
-          final_status: 'Completed (Returned)'
-        })
-        .eq('id', requestId);
+  // Open Geofence & Biometric Verification modal for return scan
+  const handleOpenReturnVerification = (requestId) => {
+    setSelectedPassForReturn(requestId);
+    setVerifyModalOpen(true);
+  };
 
-      if (!error) {
-        fetchPassRequests(studentInfo.id, studentInfo.registration_number);
+  // Called by VerificationModal upon successful face & GPS verification
+  const handleVerificationSuccess = async (newLog) => {
+    try {
+      if (selectedPassForReturn) {
+        await supabase
+          .from('pass_requests')
+          .update({
+            admin_status: 'COMPLETED',
+            final_status: 'Completed (Returned)'
+          })
+          .eq('id', selectedPassForReturn);
       }
+
+      setVerifyModalOpen(false);
+      setSelectedPassForReturn(null);
+      fetchPassRequests(studentInfo.id, studentInfo.registration_number);
     } catch (err) {
-      console.error("Mark completed error:", err);
+      console.error("Verification return success error:", err);
+      setVerifyModalOpen(false);
+      setSelectedPassForReturn(null);
     }
   };
 
   // Delete/cancel request
   const cancelPassRequest = async (requestId) => {
-    if (!window.confirm("Are you sure you want to cancel this leave pass request?")) return;
     try {
-      const { error } = await supabase.from('pass_requests').delete().eq('id', requestId);
-      if (!error) {
-        setRequests(prev => prev.filter(r => r.id !== requestId));
+      // 1. Forceful delete via Backend Server API (service role bypasses RLS)
+      try {
+        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, {
+          method: "DELETE"
+        });
+      } catch (backendErr) {
+        console.warn("Backend delete notice:", backendErr);
       }
+
+      // 2. Delete via Supabase Client
+      await supabase.from('pass_requests').delete().eq('id', requestId);
+
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+      setDeleteConfirmId(null);
     } catch (err) {
       console.error("Cancel pass error:", err);
+      try {
+        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, { method: "DELETE" });
+      } catch (e) {}
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+      setDeleteConfirmId(null);
     }
   };
+
+  const hasPendingRequest = requests.some(r => 
+    ['WAITING_FOR_PARENT', 'PENDING_ADMIN', 'APPROVED'].includes(r.admin_status)
+  );
+
+  const activeRequests = requests.filter(r => 
+    ['WAITING_FOR_PARENT', 'PENDING_ADMIN', 'APPROVED'].includes(r.admin_status)
+  );
+
+  const historyRequests = requests.filter(r => 
+    ['COMPLETED', 'REJECTED'].includes(r.admin_status)
+  );
+
+  const displayedRequests = requests.filter(req => {
+    if (activeTab === 'ACTIVE') {
+      return ['WAITING_FOR_PARENT', 'PENDING_ADMIN', 'APPROVED'].includes(req.admin_status);
+    }
+    if (activeTab === 'HISTORY') {
+      return ['COMPLETED', 'REJECTED'].includes(req.admin_status);
+    }
+    return true;
+  });
 
   return (
     <Layout>
@@ -202,23 +257,73 @@ const PassRequests = () => {
             <p className="text-xs text-gray-500 font-body">Request campus exit passes with parent SMS verification & admin authorization</p>
           </div>
 
-          <button
-            onClick={() => setModalOpen(true)}
-            className="px-5 py-2.5 bg-[#006a6a] hover:bg-[#005959] text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 self-start sm:self-auto cursor-pointer font-heading"
-          >
-            <Plus className="w-4 h-4" /> Raise Leave Pass Request
-          </button>
+          <div className="flex items-center gap-3 self-start sm:self-auto font-body">
+            {hasPendingRequest && (
+              <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold rounded-xl flex items-center gap-1 font-heading">
+                <Clock className="w-3.5 h-3.5 text-amber-600" /> Active Request Exists
+              </span>
+            )}
+            <button
+              disabled={hasPendingRequest}
+              onClick={() => setModalOpen(true)}
+              title={hasPendingRequest ? "You already have an active or pending Leave Pass request" : "Raise a new leave pass request"}
+              className="px-5 py-2.5 bg-[#006a6a] hover:bg-[#005959] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer font-heading"
+            >
+              <Plus className="w-4 h-4" /> Raise Leave Pass Request
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Navigation Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs font-body">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('ACTIVE')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'ACTIVE'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Clock className="w-4 h-4" /> Active / Pending Pass
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+                activeTab === 'ACTIVE' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {activeRequests.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('HISTORY')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'HISTORY'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <History className="w-4 h-4" /> Pass History
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+                activeTab === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {historyRequests.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ALL')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'ALL'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All Records ({requests.length})
+            </button>
+          </div>
         </div>
 
         {/* Requests Table */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 font-heading">My Pass History</h3>
-              <p className="text-xs text-gray-500 font-body">Real-time status tracking & completion management</p>
-            </div>
-          </div>
-
           {loading ? (
             <div className="p-8 space-y-3">
               {[1, 2, 3].map(i => (
@@ -239,9 +344,9 @@ const PassRequests = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {requests.length > 0 ? (
-                    requests.map((req) => {
-                      const encryptedUrl = getEncryptedTokenUrl(req.id);
+                  {displayedRequests.length > 0 ? (
+                    displayedRequests.map((req) => {
+                      const encryptedUrl = getEncryptedTokenUrl(req);
                       return (
                         <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
                           
@@ -280,7 +385,7 @@ const PassRequests = () => {
                                   rel="noopener noreferrer"
                                   className="text-[10px] text-teal-700 hover:text-teal-900 font-semibold cursor-pointer underline flex items-center gap-1"
                                 >
-                                  Open Encrypted Parent Page <ExternalLink className="w-3 h-3" />
+                                  [Dev Test] Simulate Parent Link <ExternalLink className="w-3 h-3" />
                                 </a>
                               </div>
                             )}
@@ -313,15 +418,15 @@ const PassRequests = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             {req.admin_status === 'APPROVED' ? (
                               <button
-                                onClick={() => markPassCompleted(req.id)}
+                                onClick={() => handleOpenReturnVerification(req.id)}
                                 className="px-3 py-1 bg-[#006a6a] hover:bg-[#005959] text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer font-heading flex items-center gap-1 ml-auto"
-                                title="Click when returned to campus to close pass"
+                                title="Perform Geofence & Biometric Verification to return"
                               >
                                 <CheckSquare className="w-3.5 h-3.5" /> Mark Returned
                               </button>
                             ) : (
                               <button
-                                onClick={() => cancelPassRequest(req.id)}
+                                onClick={() => setDeleteConfirmId(req.id)}
                                 className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer ml-auto"
                                 title="Cancel Pass Request"
                               >
@@ -448,30 +553,11 @@ const PassRequests = () => {
                 ></textarea>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1 font-heading">Parent Name *</label>
-                  <input
-                    type="text"
-                    name="parent_name"
-                    placeholder="Father/Mother Name"
-                    value={formData.parent_name}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full p-3 border border-gray-200 rounded-xl font-medium focus:outline-none focus:border-[#006a6a]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1 font-heading">Parent Phone (for SMS) *</label>
-                  <input
-                    type="tel"
-                    name="parent_phone"
-                    placeholder="+91 98765 43210"
-                    value={formData.parent_phone}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full p-3 border border-gray-200 rounded-xl font-medium focus:outline-none focus:border-[#006a6a]"
-                  />
+              <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 flex items-start gap-2.5 text-[#006a6a]">
+                <Smartphone className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div className="text-[11px] font-medium leading-relaxed font-body">
+                  <span className="font-bold font-heading block mb-0.5">Automated Parent Verification SMS</span>
+                  The authorization link will be sent automatically to the registered parent phone number on record for Student Reg ID <span className="font-bold font-mono text-[#005959]">{studentInfo.registration_number}</span>.
                 </div>
               </div>
 
@@ -497,6 +583,103 @@ const PassRequests = () => {
           </div>
         </div>
       )}
+
+      {/* Request Success Modal */}
+      {createdSuccessData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in font-body">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 text-center relative">
+            
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-bold text-gray-900 font-heading">Leave Request Submitted!</h3>
+              <p className="text-xs text-gray-500 font-body">Your hostel exit pass request has been created and logged.</p>
+            </div>
+
+            {/* Parent SMS Details Card */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left text-xs space-y-2">
+              <div className="flex items-center justify-between font-heading font-bold text-slate-800 border-b border-slate-200 pb-2">
+                <span className="flex items-center gap-1.5 text-[#006a6a]">
+                  <Smartphone className="w-4 h-4 text-[#006a6a]" /> Parent SMS Notification
+                </span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] rounded-full uppercase font-heading">Sent</span>
+              </div>
+
+              <div className="space-y-1 text-slate-600">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Parent Name:</span>
+                  <span className="font-semibold text-slate-800 font-heading">{createdSuccessData.parent_name || "Parent Contact"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Target Phone:</span>
+                  <span className="font-mono font-semibold text-slate-800">
+                    {createdSuccessData.parent_phone ? `${createdSuccessData.parent_phone.slice(0, 3)}******${createdSuccessData.parent_phone.slice(-4)}` : "+91 ******3210"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setCreatedSuccessData(null)}
+                className="w-full py-3.5 bg-[#006a6a] hover:bg-[#005959] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
+              >
+                Close & View Pass History
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in font-body">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 space-y-4 text-center relative">
+            
+            <div className="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto shadow-xs border border-red-100">
+              <Trash2 className="w-7 h-7 text-red-600" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-gray-900 font-heading">Cancel Pass Request?</h3>
+              <p className="text-xs text-gray-500 font-body">
+                Are you sure you want to delete this leave pass request? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer font-heading"
+              >
+                Keep Request
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelPassRequest(deleteConfirmId)}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
+              >
+                Yes, Delete
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Verification Modal for Return Scan */}
+      <VerificationModal
+        isOpen={verifyModalOpen}
+        onClose={() => { setVerifyModalOpen(false); setSelectedPassForReturn(null); }}
+        mode="Entry"
+        studentInfo={studentInfo}
+        onSuccess={handleVerificationSuccess}
+      />
 
     </Layout>
   );

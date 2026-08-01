@@ -40,17 +40,17 @@ const Sidebar = () => {
             sessionStorage.setItem('user_role', studentRecord.role || 'student');
             sessionStorage.setItem('user_name', nameStr);
 
-            // Fetch pending pass requests count for Admin
+            // Fetch pending pass requests count for Admin (exclude APPROVED, REJECTED, COMPLETED)
             if (adminStatus) {
-              const { data: pendingReqs } = await supabase
+              const { data: allReqs } = await supabase
                 .from('pass_requests')
-                .select('id')
-                .eq('parent_status', 'APPROVED')
-                .neq('admin_status', 'APPROVED')
-                .neq('admin_status', 'REJECTED');
+                .select('admin_status');
 
-              if (pendingReqs && isMounted) {
-                setPendingPassCount(pendingReqs.length);
+              if (allReqs && isMounted) {
+                const count = allReqs.filter(r => 
+                  !['APPROVED', 'REJECTED', 'COMPLETED'].includes(r.admin_status)
+                ).length;
+                setPendingPassCount(count);
               }
             }
           }
@@ -87,11 +87,14 @@ const Sidebar = () => {
 
   return (
     <div className="w-64 bg-white h-full border-r border-gray-200 flex flex-col shrink-0">
-      <div className="p-6 pt-8">
-        <h1 className="text-2xl font-bold text-[#006a6a] font-heading">IntelliSentry</h1>
-        <p className="text-sm font-semibold text-gray-500 mt-1 font-body">
-          {isAdmin ? 'Administrator Portal' : 'Student Access'}
-        </p>
+      <div className="p-6 pt-8 flex items-center gap-3">
+        <img src="/favicon.svg" alt="IntelliSentry Logo" className="w-8 h-8 rounded-xl shadow-xs" />
+        <div>
+          <h1 className="text-xl font-bold text-[#006a6a] font-heading">IntelliSentry</h1>
+          <p className="text-xs font-semibold text-gray-500 font-body">
+            {isAdmin ? 'Administrator Portal' : 'Student Access'}
+          </p>
+        </div>
       </div>
       
       <nav className="flex-1 mt-4 px-4 space-y-2">

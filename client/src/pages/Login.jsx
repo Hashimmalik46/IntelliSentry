@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
+import { AlertCircle, CheckCircle2, Shield } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 function Login() {
@@ -51,19 +51,45 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex justify-center items-center bg-gray-50 p-4">
-      <div className="bg-white px-8 py-10 flex flex-col gap-8 rounded-2xl w-full max-w-md shadow-xl border border-gray-100">
-        <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900 font-heading">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 font-body">
-            Access your security portal
-          </p>
+    <div className="min-h-screen w-full flex justify-center items-center bg-gray-50 p-4 font-body">
+      <div className="bg-white px-8 py-10 flex flex-col gap-6 rounded-3xl w-full max-w-md shadow-xl border border-gray-100">
+        
+        {/* Card Header */}
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img src="/favicon.svg" alt="IntelliSentry Logo" className="w-14 h-14 rounded-2xl shadow-sm hover:scale-105 transition-transform" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 font-heading">
+              Welcome Back
+            </h2>
+            <p className="text-xs text-gray-500 font-body mt-1">
+              Sign in to your IntelliSentry portal account
+            </p>
+          </div>
         </div>
 
+        {/* Top Notification Banners */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-start gap-2.5 text-red-800 text-xs font-body animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold font-heading block text-red-900 mb-0.5">Login Failed</span>
+              {error}
+            </div>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 flex items-start gap-2.5 text-emerald-800 text-xs font-body animate-fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold font-heading block text-emerald-900 mb-0.5">Success!</span>
+              {successMsg}
+            </div>
+          </div>
+        )}
+
         <div>
-          <form className="space-y-6" onSubmit={handleLogin}>
+          <form className="space-y-5" onSubmit={handleLogin}>
             <div>
               <label className="block text-sm font-medium text-gray-700 font-heading mb-1">
                 Email
@@ -91,36 +117,6 @@ function Login() {
                 placeholder="••••••••"
               />
             </div>
-
-            {error && (
-              <div className="rounded-xl bg-red-50 p-4 border border-red-200">
-                <div className="flex">
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 font-heading">
-                      Login Failed
-                    </h3>
-                    <div className="mt-1 text-sm text-red-700">
-                      <p>{error}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="rounded-xl bg-green-50 p-4 border border-green-200">
-                <div className="flex">
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800 font-heading">
-                      Success!
-                    </h3>
-                    <div className="mt-1 text-sm text-green-700">
-                      <p>{successMsg}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             <div className="pt-2">
               <button

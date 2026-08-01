@@ -3,7 +3,7 @@ import { MapPin, ShieldCheck, Camera, CheckCircle2, XCircle, AlertCircle, Refres
 import CameraCapture from "./Camera";
 import { supabase } from "../supabaseClient";
 
-const VerificationModal = ({ isOpen, onClose, mode = "Entry", studentInfo = {}, onSuccess }) => {
+const VerificationModal = ({ isOpen, onClose, mode = "Entry", exitType = "NORMAL_EXIT", activePass = null, studentInfo = {}, onSuccess }) => {
   const [step, setStep] = useState(1); // 1: Geofence, 2: Camera, 3: Verifying, 4: Result
   const [locationStatus, setLocationStatus] = useState(null);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -103,12 +103,18 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", studentInfo = {}, 
 
       if (result && result.verified === true) {
         const timestamp = new Date().toISOString();
+        const logType = mode === 'Entry' ? 'Entry' : (exitType === 'LEAVE_TO_HOME' ? 'Exit (Leave to Home)' : 'Exit (Normal)');
+        const expReturn = mode === 'Entry' ? null : (exitType === 'LEAVE_TO_HOME' && activePass ? `${activePass.return_date} at ${activePass.return_time}` : 'Same Day Outing');
+        const passId = mode === 'Entry' ? null : (exitType === 'LEAVE_TO_HOME' && activePass ? activePass.id : null);
+
         const logPayload = {
           user_id: studentInfo?.id || null,
           student_name: studentInfo?.name || "Student User",
           registration_number: studentInfo?.registration_number || "REG-2024-001",
-          type: mode,
-          movement_type: mode,
+          type: logType,
+          exit_type: mode === 'Entry' ? 'ENTRY' : exitType,
+          expected_return_time: expReturn,
+          leave_pass_id: passId,
           status: "AUTHORIZED",
           method: "Geofence + Biometric AI",
           created_at: timestamp,
@@ -120,7 +126,10 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", studentInfo = {}, 
             user_id: logPayload.user_id,
             student_name: logPayload.student_name,
             registration_number: logPayload.registration_number,
-            type: mode,
+            type: logType,
+            exit_type: logPayload.exit_type,
+            expected_return_time: logPayload.expected_return_time,
+            leave_pass_id: logPayload.leave_pass_id,
             status: "AUTHORIZED",
             method: "Geofence + Biometric AI",
             created_at: timestamp,
@@ -162,7 +171,7 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", studentInfo = {}, 
             </div>
             <div>
               <h3 className="font-bold text-lg leading-tight font-heading">
-                {mode === "Entry" ? "Hostel Entry Verification" : "Hostel Exit Verification"}
+                {mode === "Entry" ? "Hostel Entry Verification" : (exitType === "LEAVE_TO_HOME" ? "Hostel Exit to Home (Leave Pass)" : "Hostel Normal Exit")}
               </h3>
               <p className="text-xs text-gray-400 font-body">Multi-Factor Biometric Access Control</p>
             </div>

@@ -82,7 +82,9 @@ const StudentDirectory = () => {
           hostel: housing.hostel_name || 'Habba Khatoon Hostel',
           room: housing.room_number || 'Unassigned',
           floor: housing.floor || '1st Floor',
-          warden: housing.warden_name || 'Dr. Shazia'
+          warden: housing.warden_name || 'Dr. Shazia',
+          parent_name: housing.parent_name || 'Farooq Ahmad Malik',
+          parent_phone: housing.parent_phone || '+919876543210'
         };
       });
 
@@ -326,9 +328,15 @@ const StudentDirectory = () => {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between">
-                  <span className="text-gray-500">Hostel Warden:</span>
-                  <span className="font-bold text-gray-900">{selectedStudent.warden}</span>
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Hostel Warden:</span>
+                    <span className="font-bold text-gray-900">{selectedStudent.warden}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="text-gray-500">Official Parent Contact:</span>
+                    <span className="font-bold text-gray-900">{selectedStudent.parent_name} ({selectedStudent.parent_phone})</span>
+                  </div>
                 </div>
               </div>
 

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Key, CheckCircle2, XCircle, Clock, Search, Filter, ShieldCheck, AlertCircle, Phone, UserCheck } from 'lucide-react';
+import { Key, CheckCircle2, XCircle, Clock, Search, Filter, ShieldCheck, AlertCircle, Phone, UserCheck, CheckSquare, History, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const AdminPasses = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('PENDING'); // 'PENDING', 'HISTORY', 'ALL'
   const [filterStatus, setFilterStatus] = useState('ALL');
 
   const fetchAllRequests = async () => {
@@ -52,14 +53,54 @@ const AdminPasses = () => {
     }
   };
 
+  const handleAdminDelete = async (requestId) => {
+    try {
+      // 1. Forceful delete via Backend Server API (service role bypasses RLS)
+      try {
+        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, {
+          method: "DELETE"
+        });
+      } catch (e) {}
+
+      // 2. Delete via Supabase Client
+      await supabase.from('pass_requests').delete().eq('id', requestId);
+
+      fetchAllRequests();
+    } catch (err) {
+      console.error("Admin delete pass error:", err);
+      fetchAllRequests();
+    }
+  };
+
+  const pendingCount = requests.filter(req => 
+    !['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status)
+  ).length;
+
+  const historyCount = requests.filter(req => 
+    ['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status)
+  ).length;
+
   const filteredRequests = requests.filter(req => {
     const matchesSearch = (req.student_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (req.registration_number || '').toLowerCase().includes(searchQuery.toLowerCase());
-    if (filterStatus === 'PENDING_PARENT') return matchesSearch && req.parent_status === 'PENDING';
-    if (filterStatus === 'READY_ADMIN') return matchesSearch && req.parent_status === 'APPROVED' && req.admin_status !== 'APPROVED' && req.admin_status !== 'REJECTED';
-    if (filterStatus === 'APPROVED') return matchesSearch && req.admin_status === 'APPROVED';
-    if (filterStatus === 'REJECTED') return matchesSearch && req.admin_status === 'REJECTED';
-    return matchesSearch;
+    
+    if (!matchesSearch) return false;
+
+    if (activeTab === 'PENDING') {
+      return !['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status);
+    }
+
+    if (activeTab === 'HISTORY') {
+      return ['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status);
+    }
+
+    if (filterStatus === 'READY_ADMIN') return req.parent_status === 'APPROVED' && !['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status);
+    if (filterStatus === 'PENDING_PARENT') return req.parent_status === 'PENDING' && !['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status);
+    if (filterStatus === 'APPROVED') return req.admin_status === 'APPROVED';
+    if (filterStatus === 'REJECTED') return req.admin_status === 'REJECTED';
+    if (filterStatus === 'COMPLETED') return req.admin_status === 'COMPLETED';
+
+    return true;
   });
 
   const headerRight = (
@@ -72,7 +113,7 @@ const AdminPasses = () => {
 
   return (
     <Layout headerRight={headerRight}>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6 font-body">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -82,26 +123,66 @@ const AdminPasses = () => {
           </div>
         </div>
 
-        {/* Master Table Container */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 font-heading">All Hostel Exit Requests</h3>
-              <p className="text-xs text-gray-500 font-body">Sequential Parent Approval ➔ Admin Authorization</p>
+        {/* Tab Navigation Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setActiveTab('PENDING'); setFilterStatus('ALL'); }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'PENDING'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Clock className="w-4 h-4" /> Current Pending Requests
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+                activeTab === 'PENDING' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {pendingCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('HISTORY'); setFilterStatus('ALL'); }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'HISTORY'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <History className="w-4 h-4" /> Request History
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+                activeTab === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {historyCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('ALL'); setFilterStatus('ALL'); }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'ALL'
+                  ? 'bg-[#006a6a] text-white shadow-sm'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All Records ({requests.length})
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search student or Reg No..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-[#006a6a] w-48 sm:w-60 font-body"
+              />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 font-body">
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search student or Reg No..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-[#006a6a] w-48 sm:w-64 font-body"
-                />
-              </div>
-
+            {activeTab === 'ALL' && (
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -112,14 +193,18 @@ const AdminPasses = () => {
                 <option value="PENDING_PARENT">Waiting for Parent</option>
                 <option value="APPROVED">Admin Approved</option>
                 <option value="REJECTED">Admin Rejected</option>
+                <option value="COMPLETED">Completed (Returned)</option>
               </select>
-            </div>
+            )}
           </div>
+        </div>
 
+        {/* Master Table Container */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           {loading ? (
             <div className="p-8 space-y-3 font-body">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-12 bg-gray-50 rounded-xl"></div>
+                <div key={i} className="h-12 bg-gray-50 rounded-xl animate-pulse"></div>
               ))}
             </div>
           ) : (
@@ -177,7 +262,11 @@ const AdminPasses = () => {
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {req.admin_status === 'APPROVED' ? (
+                          {req.admin_status === 'COMPLETED' ? (
+                            <span className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold rounded-full uppercase tracking-wider font-heading">
+                              Completed (Returned)
+                            </span>
+                          ) : req.admin_status === 'APPROVED' ? (
                             <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full uppercase tracking-wider font-heading">
                               Pass Approved
                             </span>
@@ -186,7 +275,7 @@ const AdminPasses = () => {
                               Pass Rejected
                             </span>
                           ) : req.parent_status === 'APPROVED' ? (
-                            <span className="px-3 py-1 bg-blue-50 text-blue-800 border border-blue-200 text-xs font-bold rounded-full uppercase tracking-wider font-heading">
+                            <span className="px-3 py-1 bg-blue-50 text-blue-800 border border-blue-200 text-xs font-bold rounded-full uppercase tracking-wider font-heading animate-pulse">
                               Ready for Admin Action
                             </span>
                           ) : (
@@ -197,31 +286,41 @@ const AdminPasses = () => {
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          {req.admin_status === 'APPROVED' || req.admin_status === 'REJECTED' ? (
-                            <span className="text-xs font-semibold text-gray-400">Decision Finalized</span>
-                          ) : req.parent_status === 'APPROVED' ? (
-                            <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2">
+                            {req.admin_status === 'APPROVED' || req.admin_status === 'REJECTED' || req.admin_status === 'COMPLETED' ? (
+                              <span className="text-xs font-semibold text-gray-400">Decision Finalized</span>
+                            ) : req.parent_status === 'APPROVED' ? (
+                              <>
+                                <button
+                                  onClick={() => handleAdminDecision(req.id, 'APPROVE')}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer font-heading"
+                                >
+                                  Approve Pass
+                                </button>
+                                <button
+                                  onClick={() => handleAdminDecision(req.id, 'REJECT')}
+                                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer font-heading"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : (
                               <button
-                                onClick={() => handleAdminDecision(req.id, 'APPROVE')}
-                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer font-heading"
+                                disabled
+                                className="px-3.5 py-1.5 bg-gray-100 text-gray-400 text-xs font-bold rounded-lg cursor-not-allowed font-heading"
                               >
-                                Approve Pass
+                                Waiting for Parent
                               </button>
-                              <button
-                                onClick={() => handleAdminDecision(req.id, 'REJECT')}
-                                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer font-heading"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
+                            )}
+
                             <button
-                              disabled
-                              className="px-3.5 py-1.5 bg-gray-100 text-gray-400 text-xs font-bold rounded-lg cursor-not-allowed font-heading"
+                              onClick={() => handleAdminDelete(req.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer ml-1"
+                              title="Delete request record"
                             >
-                              Waiting for Parent
+                              <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
+                          </div>
                         </td>
 
                       </tr>
@@ -229,7 +328,7 @@ const AdminPasses = () => {
                   ) : (
                     <tr>
                       <td colSpan="5" className="px-6 py-10 text-center text-sm text-gray-500 font-medium">
-                        No pass requests found matching the current filter.
+                        {activeTab === 'PENDING' ? "No active pending leave pass requests." : "No pass request records found."}
                       </td>
                     </tr>
                   )}

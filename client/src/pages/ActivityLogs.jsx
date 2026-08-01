@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { ArrowDownLeft, ArrowUpRight, History, Search, Shield, Filter } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, History, Calendar, Shield, Filter, Home } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const ActivityLogs = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRange, setDateRange] = useState('ALL'); // 'ALL', 'WEEK', 'MONTH', '3_MONTHS'
 
   useEffect(() => {
     async function loadLogs() {
@@ -42,9 +42,12 @@ const ActivityLogs = () => {
             const dateObj = new Date(log.created_at || Date.now());
             return {
               id: log.id,
+              createdAt: dateObj,
               date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               type: log.type || 'Entry',
+              exit_type: log.exit_type || (log.type.includes('Exit') ? 'NORMAL_EXIT' : 'ENTRY'),
+              expected_return_time: log.expected_return_time || '-',
               method: log.method || 'Geofence + Biometric',
               status: log.status || 'AUTHORIZED',
               statusColor: log.status === 'AUTHORIZED' ? 'bg-teal-50 text-[#006a6a]' : 'bg-orange-50 text-orange-600'
@@ -64,9 +67,28 @@ const ActivityLogs = () => {
   }, []);
 
   const filteredHistory = history.filter(item => {
-    const matchesFilter = filterType === 'ALL' ? true : (filterType === 'ENTRY' ? item.type.includes('Entry') : item.type.includes('Exit'));
-    const matchesSearch = item.method.toLowerCase().includes(searchQuery.toLowerCase()) || item.type.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
+    // 1. Movement Direction Filter
+    const matchesMovement = filterType === 'ALL' 
+      ? true 
+      : (filterType === 'ENTRY' ? item.type.includes('Entry') : item.type.includes('Exit'));
+
+    // 2. Date Range Filter
+    let matchesDate = true;
+    const now = new Date();
+    const itemDate = new Date(item.createdAt);
+
+    if (dateRange === 'WEEK') {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      matchesDate = itemDate >= oneWeekAgo;
+    } else if (dateRange === 'MONTH') {
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      matchesDate = itemDate >= oneMonthAgo;
+    } else if (dateRange === '3_MONTHS') {
+      const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      matchesDate = itemDate >= threeMonthsAgo;
+    }
+
+    return matchesMovement && matchesDate;
   });
 
   return (
@@ -85,22 +107,27 @@ const ActivityLogs = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 font-heading font-heading">Personal Audit Records</h3>
+              <h3 className="text-lg font-bold text-gray-900 font-heading">Personal Audit Records</h3>
               <p className="text-xs text-gray-500 font-body">Timestamped logs for geofence & biometric face scans</p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search logs..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-[#006a6a] w-48 font-body"
-                />
+            <div className="flex flex-wrap items-center gap-3 font-body">
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl">
+                <Calendar className="w-4 h-4 text-[#006a6a]" />
+                <select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="text-xs font-semibold text-gray-700 bg-transparent focus:outline-none cursor-pointer font-body"
+                >
+                  <option value="ALL">All Time</option>
+                  <option value="WEEK">Past 7 Days (Week)</option>
+                  <option value="MONTH">Past 30 Days (Month)</option>
+                  <option value="3_MONTHS">Past 90 Days (3 Months)</option>
+                </select>
               </div>
 
+              {/* Movement Type Filter */}
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
@@ -124,37 +151,50 @@ const ActivityLogs = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
-                    <th className="px-6 py-4">Movement Direction</th>
+                    <th className="px-6 py-4">Movement & Exit Type</th>
                     <th className="px-6 py-4">Date & Time</th>
+                    <th className="px-6 py-4">Expected Return</th>
                     <th className="px-6 py-4">Verification Method</th>
                     <th className="px-6 py-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 font-body">
                   {filteredHistory.length > 0 ? (
                     filteredHistory.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-bold font-heading ${item.type.includes('Exit') ? 'text-[#b46b2b]' : 'text-[#006a6a]'}`}>
-                            {item.type.includes('Exit') ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
-                            {item.type}
-                          </span>
+                          {item.type.includes('Entry') ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold font-heading text-[#006a6a]">
+                              <ArrowDownLeft className="w-4 h-4" /> Hostel Entry
+                            </span>
+                          ) : item.exit_type === 'LEAVE_TO_HOME' || item.type.includes('Leave') ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold font-heading text-purple-700">
+                              <Home className="w-4 h-4" /> Exit to Home (Pass)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold font-heading text-amber-700">
+                              <ArrowUpRight className="w-4 h-4" /> Normal Local Exit
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-700 font-medium">
                           {item.date} at {item.time}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-gray-700">
+                          {item.expected_return_time}
+                        </td>
                         <td className="px-6 py-4 text-xs text-gray-600 font-medium">{item.method}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase ${item.statusColor} font-heading`}>
-                            {item.status}
+                            {item.status} ✅
                           </span>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="4" className="px-6 py-10 text-center text-sm text-gray-500 font-medium">
-                        No activity logs recorded yet.
+                      <td colSpan="5" className="px-6 py-10 text-center text-sm text-gray-500 font-medium font-body">
+                        No activity logs recorded for the selected time range.
                       </td>
                     </tr>
                   )}

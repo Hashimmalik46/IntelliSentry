@@ -10,6 +10,8 @@ const AdminDashboard = () => {
     totalStudents: 0,
     insideCount: 0,
     outsideCount: 0,
+    normalExitsCount: 0,
+    homeExitsCount: 0,
     biometricsEnrolled: 0,
   });
 
@@ -37,7 +39,17 @@ const AdminDashboard = () => {
       const { data: embeddingsData } = await supabase.from('face_embeddings').select('user_id, registration_number');
       const enrolledSet = new Set((embeddingsData || []).map(e => (e.registration_number || e.user_id || '').toUpperCase().trim()));
 
-      // 3. Fetch Attendance Logs (Source of truth for Inside/Outside status)
+      // 4. Fetch Active Approved Pass Requests (Source of truth for Home Exits)
+      const { data: activePassesData } = await supabase
+        .from('pass_requests')
+        .select('id, user_id, registration_number, admin_status')
+        .eq('admin_status', 'APPROVED');
+
+      const activeApprovedPassRegs = new Set(
+        (activePassesData || []).map(p => (p.registration_number || p.user_id || '').toUpperCase().trim())
+      );
+
+      // 3. Fetch Attendance Logs (Source of truth for movement logs)
       const { data: logsData } = await supabase
         .from('attendance_logs')
         .select('*')
@@ -45,16 +57,30 @@ const AdminDashboard = () => {
 
       const formattedLogs = (logsData || []).map(log => {
         const dateObj = new Date(log.created_at || Date.now());
+        
+        let exitTypeLabel = 'Entry';
+        if (log.type.includes('Exit') || log.exit_type) {
+          if (log.exit_type === 'LEAVE_TO_HOME' || log.type.includes('Leave to Home')) {
+            exitTypeLabel = 'Exit to Home (Leave Pass)';
+          } else {
+            exitTypeLabel = 'Normal Local Exit';
+          }
+        }
+
         return {
           id: log.id,
           user_id: log.user_id,
           student_name: log.student_name || 'Student',
           registration_number: log.registration_number || 'N/A',
           type: log.type || 'Entry',
+          exit_type: log.exit_type || (log.type.includes('Exit') ? 'NORMAL_EXIT' : 'ENTRY'),
+          exit_type_label: exitTypeLabel,
+          expected_return_time: log.expected_return_time || (log.type.includes('Exit') ? 'Same Day' : '-'),
           method: log.method || 'Geofence + Biometric',
           status: log.status || 'AUTHORIZED',
           date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          raw_created_at: log.created_at || Date.now()
         };
       });
 
@@ -74,24 +100,51 @@ const AdminDashboard = () => {
           : (userIdToRegMap[log.user_id] || log.user_id);
         
         if (key && !studentLatestMovement[key]) {
-          studentLatestMovement[key] = log.type;
+          studentLatestMovement[key] = log;
         }
       }
 
       let insideCount = 0;
       let outsideCount = 0;
+      let normalExitsCount = 0;
+      let homeExitsCount = 0;
       let biometricsEnrolled = 0;
+
+      const todayStr = new Date().toDateString();
 
       studentRows.forEach(s => {
         const regKey = (s.registration_number && s.registration_number !== 'N/A')
           ? s.registration_number.toUpperCase().trim()
           : (s.user_id || s.email);
 
-        const latestScanType = studentLatestMovement[regKey];
-        const isOutside = latestScanType ? latestScanType.toLowerCase().includes('exit') : false;
+        const latestLog = studentLatestMovement[regKey];
+        let isOutside = false;
+        let exitCategory = null;
+
+        if (latestLog && latestLog.type.toLowerCase().includes('exit')) {
+          if (latestLog.exit_type === 'LEAVE_TO_HOME') {
+            // Only count as active Home Pass Exit if there is an active APPROVED pass in pass_requests
+            if (activeApprovedPassRegs.has(regKey) || (s.user_id && activeApprovedPassRegs.has(s.user_id))) {
+              isOutside = true;
+              exitCategory = 'LEAVE_TO_HOME';
+            }
+          } else {
+            // Normal Local Exit: Check if log was created today
+            const logDateStr = new Date(latestLog.raw_created_at).toDateString();
+            if (logDateStr === todayStr) {
+              isOutside = true;
+              exitCategory = 'NORMAL_EXIT';
+            }
+          }
+        }
 
         if (isOutside) {
           outsideCount++;
+          if (exitCategory === 'LEAVE_TO_HOME') {
+            homeExitsCount++;
+          } else {
+            normalExitsCount++;
+          }
         } else {
           insideCount++;
         }
@@ -107,6 +160,8 @@ const AdminDashboard = () => {
         totalStudents: studentRows.length,
         insideCount: insideCount,
         outsideCount: outsideCount,
+        normalExitsCount: normalExitsCount,
+        homeExitsCount: homeExitsCount,
         biometricsEnrolled: biometricsEnrolled,
       });
     } catch (err) {
@@ -122,8 +177,8 @@ const AdminDashboard = () => {
 
   const exportMasterCSV = () => {
     if (attendanceLogs.length === 0) return;
-    const headers = ["Student Name", "Registration No", "Movement Type", "Date", "Time", "Method", "Status"];
-    const rows = attendanceLogs.map(l => [l.student_name, l.registration_number, l.type, l.date, l.time, l.method, l.status]);
+    const headers = ["Student Name", "Registration No", "Movement Type", "Exit Type", "Date & Time", "Expected Return", "Method", "Status"];
+    const rows = attendanceLogs.map(l => [l.student_name, l.registration_number, l.type, l.exit_type_label, `${l.date} ${l.time}`, l.expected_return_time, l.method, l.status]);
     const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -138,7 +193,8 @@ const AdminDashboard = () => {
     const matchesSearch = log.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           log.registration_number.toLowerCase().includes(searchQuery.toLowerCase());
     if (logFilter === 'ENTRY') return matchesSearch && log.type.includes('Entry');
-    if (logFilter === 'EXIT') return matchesSearch && log.type.includes('Exit');
+    if (logFilter === 'NORMAL_EXIT') return matchesSearch && log.exit_type === 'NORMAL_EXIT';
+    if (logFilter === 'HOME_EXIT') return matchesSearch && log.exit_type === 'LEAVE_TO_HOME';
     return matchesSearch;
   });
 
@@ -165,7 +221,7 @@ const AdminDashboard = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 font-heading">Campus Safety & Access Audit</h2>
-            <p className="text-xs text-gray-500 font-body">Master oversight for student presence inside/outside premises and movement logs</p>
+            <p className="text-xs text-gray-500 font-body">Master oversight for student presence inside/outside premises, leave pass exits, and movement logs</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -185,7 +241,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Metrics Grid with Skeleton Loading */}
+        {/* Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           
           {loading ? (
@@ -227,7 +283,9 @@ const AdminDashboard = () => {
                 <div>
                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider font-heading">Outside Premises</p>
                   <h3 className="text-2xl font-extrabold text-amber-700 mt-1 font-heading">{metrics.outsideCount}</h3>
-                  <p className="text-[11px] text-amber-600 font-semibold mt-0.5">🟠 Currently Off-Campus</p>
+                  <p className="text-[11px] text-amber-600 font-semibold mt-0.5">
+                    Local: {metrics.normalExitsCount} | Home Pass: {metrics.homeExitsCount}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
                   <LogOut className="w-6 h-6" />
@@ -253,7 +311,7 @@ const AdminDashboard = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 font-heading">Master Attendance & Access Logs</h3>
+              <h3 className="text-lg font-bold text-gray-900 font-heading">Master Attendance & Movement Audit Logs</h3>
               <p className="text-xs text-gray-500 font-body">Real-time geofence and biometric verification audit log</p>
             </div>
 
@@ -276,7 +334,8 @@ const AdminDashboard = () => {
               >
                 <option value="ALL">All Movements</option>
                 <option value="ENTRY">Hostel Entries</option>
-                <option value="EXIT">Hostel Exits</option>
+                <option value="NORMAL_EXIT">Normal Local Exits</option>
+                <option value="HOME_EXIT">Exit to Home (Pass)</option>
               </select>
             </div>
           </div>
@@ -287,10 +346,10 @@ const AdminDashboard = () => {
                 <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
                   <th className="px-6 py-4">Student</th>
                   <th className="px-6 py-4">Reg Number</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Date & Time</th>
-                  <th className="px-6 py-4">Method</th>
-                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Movement & Exit Type</th>
+                  <th className="px-6 py-4">Scan Timestamp</th>
+                  <th className="px-6 py-4">Expected Return</th>
+                  <th className="px-6 py-4">Method & Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-body">
@@ -311,18 +370,29 @@ const AdminDashboard = () => {
                       <td className="px-6 py-4 font-bold text-gray-900 text-sm font-heading">{log.student_name}</td>
                       <td className="px-6 py-4 font-mono text-xs font-semibold text-[#006a6a]">{log.registration_number}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 text-xs font-bold font-heading ${log.type.includes('Exit') ? 'text-[#b46b2b]' : 'text-[#006a6a]'}`}>
-                          {log.type.includes('Exit') ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
-                          {log.type}
-                        </span>
+                        {log.type.includes('Entry') ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold font-heading text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                            <ArrowDownLeft className="w-3.5 h-3.5" /> Hostel Entry
+                          </span>
+                        ) : log.exit_type === 'LEAVE_TO_HOME' || log.exit_type_label.includes('Leave') ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold font-heading text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                            <Home className="w-3.5 h-3.5" /> Exit to Home (Pass)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold font-heading text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                            <ArrowUpRight className="w-3.5 h-3.5" /> Normal Local Exit
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-600 font-medium">
                         {log.date} at {log.time}
                       </td>
-                      <td className="px-6 py-4 text-xs text-gray-600 font-medium">{log.method}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-gray-700">
+                        {log.expected_return_time}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2.5 py-1 text-[10px] font-bold uppercase bg-teal-50 text-[#006a6a] font-heading">
-                          {log.status}
+                          {log.status} ✅
                         </span>
                       </td>
                     </tr>
