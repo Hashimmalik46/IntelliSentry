@@ -160,32 +160,32 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", exitType = "NORMAL
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 relative transition-all font-body">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100 relative transition-all font-body max-h-[92vh] flex flex-col">
         
         {/* Header */}
-        <div className="bg-slate-900 text-white px-6 py-5 flex items-center justify-between">
+        <div className="bg-slate-900 text-white px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#006a6a] flex items-center justify-center text-white font-bold">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#006a6a] flex items-center justify-center text-white font-bold shrink-0">
+              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-lg leading-tight font-heading">
+              <h3 className="font-bold text-base sm:text-lg leading-tight font-heading">
                 {mode === "Entry" ? "Hostel Entry Verification" : (exitType === "LEAVE_TO_HOME" ? "Hostel Exit to Home (Leave Pass)" : "Hostel Normal Exit")}
               </h3>
-              <p className="text-xs text-gray-400 font-body">Multi-Factor Biometric Access Control</p>
+              <p className="text-[11px] sm:text-xs text-gray-400 font-body">Multi-Factor Biometric Access Control</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           
           {/* STEP 1: Geofence Verification */}
           {step === 1 && (

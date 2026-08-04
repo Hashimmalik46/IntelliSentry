@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Users, Search, Filter, CheckCircle2, XCircle, Home, LogOut, Building, ShieldAlert, Mail, Phone, Eye, X, UserCheck } from 'lucide-react';
+import { Users, Search, Filter, CheckCircle2, XCircle, Home, LogOut, Building, ShieldAlert, Mail, Phone, Eye, X, UserCheck, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const StudentDirectory = () => {
@@ -126,11 +126,13 @@ const StudentDirectory = () => {
   const faceBiometricsCount = studentsList.filter(s => s.enrolled).length;
 
   const headerRight = (
-    <div className="flex items-center gap-3">
-      <span className="px-3.5 py-1 bg-teal-100 text-teal-900 border border-teal-300 text-xs font-extrabold rounded-full uppercase tracking-wider font-heading shadow-xs">
-        Student Directory
-      </span>
-    </div>
+    <button
+      onClick={fetchStudentDirectory}
+      className="w-9 h-9 rounded-xl bg-[#006a6a] hover:bg-[#005959] flex items-center justify-center text-white transition-colors cursor-pointer shadow-xs"
+      title="Refresh Data"
+    >
+      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+    </button>
   );
 
   return (
@@ -249,7 +251,7 @@ const StudentDirectory = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
                     <th className="px-6 py-4">Student Name</th>

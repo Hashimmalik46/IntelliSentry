@@ -1,40 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#004d4d"/>
-      <stop offset="100%" stop-color="#006a6a"/>
+      <stop offset="0%" stop-color="#003d3d"/>
+      <stop offset="50%" stop-color="#005a5a"/>
+      <stop offset="100%" stop-color="#007a7a"/>
     </linearGradient>
-    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#00b3b3"/>
-      <stop offset="100%" stop-color="#006a6a"/>
+
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#008080"/>
+      <stop offset="100%" stop-color="#004d4d"/>
     </linearGradient>
+
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0f2f1"/>
+    </linearGradient>
+
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feGaussianBlur stdDeviation="10" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
   
-  <!-- Outer Rounded Container -->
+  <!-- Outer Container -->
   <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
 
-  <!-- Shield Base -->
-  <path d="M256 72 L384 120 V248 C384 340 328 412 256 440 C184 412 128 340 128 248 V120 Z" 
+  <!-- Outer Glowing Shield Border -->
+  <path d="M256 64 L400 118 V256 C400 354 338 428 256 456 C174 428 112 354 112 256 V118 Z" 
         fill="none" 
         stroke="#ffffff" 
-        stroke-width="24" 
+        stroke-width="16" 
+        stroke-opacity="0.9"
         stroke-linejoin="round" 
         filter="url(#glow)"/>
 
-  <path d="M256 96 L360 136 V248 C360 324 314 384 256 408 C198 384 152 324 152 248 V136 Z" 
-        fill="url(#shieldGrad)" />
+  <!-- Inner Shield Fill -->
+  <path d="M256 88 L376 134 V256 C376 338 322 404 256 428 C190 404 136 338 136 256 V134 Z" 
+        fill="url(#shieldGrad)" 
+        stroke="rgba(255,255,255,0.2)"
+        stroke-width="4" />
 
-  <!-- Biometric Lock / Sentinel Eye Pulse -->
-  <circle cx="256" cy="240" r="56" fill="#ffffff" opacity="0.9" />
-  <circle cx="256" cy="240" r="32" fill="#004d4d" />
-  <circle cx="256" cy="240" r="14" fill="#00e6e6" />
-  
-  <!-- Geofence Sentinel Ring Arcs -->
-  <path d="M200 240 A56 56 0 0 1 312 240" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
-  <path d="M256 160 V184" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
-  <path d="M256 296 V320" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <!-- Sentinel Cyan Tech Ring Accent -->
+  <circle cx="256" cy="260" r="130" fill="none" stroke="#00f2fe" stroke-width="6" stroke-dasharray="24 12" opacity="0.4" />
+
+  <!-- Bold "IS" Branding Typography -->
+  <text x="256" y="295" 
+        font-family="Arial, Helvetica, sans-serif" 
+        font-weight="900" 
+        font-size="190" 
+        fill="url(#textGrad)" 
+        text-anchor="middle" 
+        letter-spacing="-4">IS</text>
+
+  <!-- Sentinel AI Dot Accent over the 'I' -->
+  <circle cx="198" cy="155" r="16" fill="#00f2fe" />
+  <circle cx="198" cy="155" r="8" fill="#ffffff" />
+
+  <!-- Subtle Security Lock Arc at Bottom -->
+  <path d="M220 340 H292" stroke="#00f2fe" stroke-width="10" stroke-linecap="round" opacity="0.9" />
 </svg>

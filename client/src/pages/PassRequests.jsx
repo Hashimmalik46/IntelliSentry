@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Key, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Calendar, Send, Smartphone, ExternalLink, CheckSquare, Trash2, History } from 'lucide-react';
+import { Key, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Calendar, Send, Smartphone, ExternalLink, CheckSquare, Trash2, History, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import VerificationModal from '../components/VerificationModal';
 
@@ -332,40 +332,40 @@ const PassRequests = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse font-body">
+              <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
-                  <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
-                    <th className="px-6 py-4">Pass Type & Reason</th>
-                    <th className="px-6 py-4">Departure</th>
-                    <th className="px-6 py-4">Expected Return</th>
-                    <th className="px-6 py-4">Parent Verification</th>
-                    <th className="px-6 py-4">Admin Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                  <tr className="bg-gray-50/80 text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
+                    <th className="px-4 py-3">Pass Category</th>
+                    <th className="px-4 py-3">Departure Date</th>
+                    <th className="px-4 py-3">Expected Return</th>
+                    <th className="px-4 py-3">Parent Verification</th>
+                    <th className="px-4 py-3">Admin Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 font-body">
                   {displayedRequests.length > 0 ? (
                     displayedRequests.map((req) => {
                       const encryptedUrl = getEncryptedTokenUrl(req);
                       return (
                         <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
                           
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             <p className="font-bold text-gray-900 text-sm font-heading">{req.leave_type}</p>
                             <p className="text-xs text-gray-500 mt-0.5 max-w-xs truncate">{req.reason}</p>
                           </td>
 
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-700">
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
                             <p className="font-semibold">{req.leave_date}</p>
                             <p className="text-gray-400">{req.leave_time}</p>
                           </td>
 
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-700">
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
                             <p className="font-semibold">{req.return_date}</p>
                             <p className="text-gray-400">{req.return_time}</p>
                           </td>
 
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             {req.parent_status === 'APPROVED' ? (
                               <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-full inline-flex items-center gap-1 font-heading">
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Parent Approved
@@ -391,7 +391,7 @@ const PassRequests = () => {
                             )}
                           </td>
 
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             {req.admin_status === 'APPROVED' ? (
                               <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full uppercase tracking-wider font-heading">
                                 Pass Approved ✅
@@ -415,7 +415,7 @@ const PassRequests = () => {
                             )}
                           </td>
 
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-3 whitespace-nowrap text-right">
                             {req.admin_status === 'APPROVED' ? (
                               <button
                                 onClick={() => handleOpenReturnVerification(req.id)}
@@ -424,14 +424,16 @@ const PassRequests = () => {
                               >
                                 <CheckSquare className="w-3.5 h-3.5" /> Mark Returned
                               </button>
-                            ) : (
+                            ) : !['APPROVED', 'REJECTED', 'COMPLETED'].includes(req.admin_status) && req.parent_status !== 'REJECTED' ? (
                               <button
                                 onClick={() => setDeleteConfirmId(req.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer ml-auto"
-                                title="Cancel Pass Request"
+                                className="px-2.5 py-1 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-lg transition-all cursor-pointer font-heading flex items-center gap-1 ml-auto"
+                                title="Cancel Pending Pass Request"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <X className="w-3.5 h-3.5" /> Cancel Request
                               </button>
+                            ) : (
+                              <span className="text-xs font-medium text-gray-400 font-body">-</span>
                             )}
                           </td>
 
@@ -456,7 +458,7 @@ const PassRequests = () => {
       {/* Raise Request Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl relative">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-8 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <div>

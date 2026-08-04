@@ -1,6 +1,6 @@
 # IntelliSentry - Complete Project Handoff & Architecture Blueprint
 
-> **DOCUMENT PURPOSE**: This document contains the full system architecture, database schema, workflow mechanics, API routes, and status details of the **IntelliSentry** project. If your session or account limits expire, any AI assistant or developer can read this document and seamlessly pick up where you left off.
+> **DOCUMENT PURPOSE**: This document contains the full system architecture, database schema, workflow mechanics, API routes, layout architecture, and status details of the **IntelliSentry** project. If your session or account limits expire, any AI assistant or developer can read this document and seamlessly pick up where you left off.
 
 ---
 
@@ -12,6 +12,7 @@
 - **Automated Parent 2FA SMS Verification via Twilio**
 - **Split Exit Movement Control (Normal Exit vs Leave to Home)**
 - **Dedicated Admin Student Onboarding Portal & Profile Activation**
+- **Fully Responsive Layout & Mobile Bottom Navigation Bar (5-Tab Access)**
 - **Real-Time Admin Oversight & Master Access Audit Logs**
 
 ---
@@ -256,14 +257,18 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 3. **Warden / Admin Final Pass Approval (`AdminPasses.jsx`)**:
    - Once parent approves (`PENDING_ADMIN`), warden / admin reviews and grants final approval (`APPROVED`).
 
-### B. Split Exit Movement Control
-1. **Normal Exit**:
+### B. Split Exit & Entry Movement Control
+1. **Enter into Hostel**:
+   - Inbound gate scan with Geofence GPS + Biometric AI.
+   - If student is already marked `IN HOSTEL` (`isInside === true`), the system displays an alert banner ("Already Marked Inside Hostel") preventing duplicate active entries until an exit is logged.
+2. **Normal Exit**:
    - Local outings during standard hours.
-   - Requires student status = `IN HOSTEL`.
+   - Requires student status = `IN HOSTEL`. If already marked `OUT` (`isInside === false`), displays an alert banner ("Multiple Active Exits Prevented").
    - Logs `attendance_logs` with `type = 'Exit (Normal)'`, `exit_type = 'NORMAL_EXIT'`, `expected_return_time = 'Same Day Outing'`.
-2. **Exit to Home**:
+3. **Exit to Home**:
    - Weekend / Home leave.
-   - System checks `public.pass_requests` for an `APPROVED` pass for this student. If missing/unapproved, exit is blocked.
+   - Requires student status = `IN HOSTEL`. If already marked `OUT`, displays an alert banner ("Multiple Active Exits Prevented").
+   - System checks `public.pass_requests` for an `APPROVED` pass for this student. If missing/unapproved, exit is blocked with an alert banner ("Approved Leave Pass Required").
    - Logs `attendance_logs` with `type = 'Exit (Leave to Home)'`, `exit_type = 'LEAVE_TO_HOME'`, `expected_return_time = '${return_date} at ${return_time}'`.
 
 ### C. Dedicated Student Onboarding Portal (`AdminOnboarding.jsx`)
@@ -283,12 +288,53 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 
 ### D. Layout & Metric Distribution Across Admin Pages
 - **Campus Safety Dashboard ([AdminDashboard.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminDashboard.jsx))**:
-  - Focuses on real-time presence & movement audit: **Inside Premises** & **Outside Premises** (max-w-2xl container).
-  - Includes direct navigation shortcut button to **Student Onboarding**.
+  - Focuses on real-time presence & movement audit: **Inside Premises**, **Outside Premises**, and **Students Outside After 5 PM** real-time KPI metrics.
+  - Includes direct navigation shortcut button to **Student Onboarding** and interactive **Overdue Report Modal**.
 - **Student Directory ([StudentDirectory.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/StudentDirectory.jsx))**:
   - Displays roster management statistics with skeleton pulse loading: **Total Registered Students**, **Fully Onboarded**, and **Face Biometrics Active**.
 - **Student Onboarding Portal ([AdminOnboarding.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminOnboarding.jsx))**:
   - Focuses on interactive student setup and profile completion.
+
+### E. Return Deadline & Hostel Gate Closed System (5:00 PM - 8:00 AM)
+1. **Hostel Gate Closed Rules (5:00 PM to 8:00 AM)**:
+   - Standard campus outing hours are **8:00 AM to 5:00 PM**.
+   - Between **5:00 PM and 8:00 AM**, new campus exits (**Normal Exit** and **Exit to Home**) are disabled/locked (`🔒 Gate Closed (5 PM - 8 AM)`).
+   - If a student attempts to log an exit outside standard hours, the system blocks the exit and displays an alert notice (*"Hostel Gate Closed (5:00 PM - 8:00 AM): New campus exits are disabled after the 5:00 PM deadline until 8:00 AM tomorrow morning"*).
+   - Inbound **Enter into Hostel** scans remain 100% enabled at all hours so overdue or returning students can check back in safely.
+2. **Student Dashboard Return Alerts (For Students Outside Campus)**:
+   - **30-Minute Warning Alert (4:30 PM - 5:00 PM)**: Minimal amber reminder banner displayed when a student is marked **Outside Campus** within 30 minutes of the 5:00 PM return deadline. Displays remaining countdown minutes.
+   - **High-Priority Overdue Alert (After 5:00 PM)**: Minimal rose alert banner replacing the warning if the student has not checked back in by 5:00 PM. Displays live **Overdue Duration** (e.g. `1 hr 15 mins overdue`).
+   - **Auto-Clearing**: Clears automatically when the student completes their gate entry scan.
+3. **Admin Dashboard Real-time KPI & Overdue Report Modal**:
+   - **"Students Outside After 5 PM" KPI Card**: Real-time metric card showing the count of overdue students.
+   - **Interactive Overdue Report Modal (`max-w-4xl`)**: Opens on clicking the KPI card. Displays a full breakdown table with:
+     - Student Name (with initial avatar and housing room info)
+     - Roll Number (Registration Number)
+     - Checkout Time (Formatted exit timestamp)
+     - Expected Return Time (5:00 PM)
+     - Overdue Duration (Formatted duration pill, `whitespace-nowrap min-w-[160px]` preventing text clipping)
+   - Includes real-time search filtering within the modal.
+
+### F. Mobile Responsive Architecture & Bottom Navigation Bar
+1. **Dual-Mode Navigation Frame (`Sidebar.jsx` & `Layout.jsx`)**:
+   - **Desktop View (`>= 768px`)**: Left-aligned fixed vertical sidebar (`md:fixed md:top-0 md:bottom-0 md:left-0 md:w-64 md:z-30`) with official logo, menu links with live badge counts, and user profile footer. Main area offset using `md:pl-64`.
+   - **Mobile View (`< 768px`)**: Fixed bottom navigation bar (`fixed bottom-0 left-0 right-0 z-50 h-16 bg-white/95 backdrop-blur-md border-t shadow-lg`) displaying 5 clean icon tabs for students:
+     - `Home` (`/studentportal`)
+     - `Passes` (`/pass-requests`)
+     - `Logs` (`/activity-logs`)
+     - `Profile` (`/profile`)
+     - `Help` (`/help`)
+2. **Mobile Header Topbar**:
+   - Topbar in `Layout.jsx` displays IntelliSentry logo and branding on the left for mobile viewports, with a compact Logout button on the right.
+3. **Main Content Padding & Overflow Protection**:
+   - Added `pb-24` on mobile main container so scrollable page content, cards, and buttons never get covered by the 64px fixed bottom navbar.
+   - Added `w-full max-w-full overflow-x-hidden` on main containers and `overflow-x-auto min-w-[700px]` on all data tables across `AdminDashboard`, `AdminPasses`, `AdminOnboarding`, `StudentDirectory`, `PassRequests`, and `ActivityLogs`.
+
+### G. Auth Session & Profile Query Stability (`maybeSingle()`)
+1. **Graceful Single Row Query handling**:
+   - Updated `.single()` queries to `.maybeSingle()` across `ProtectedRoute.jsx`, `Profile.jsx`, `Sidebar.jsx`, and `Layout.jsx`.
+2. **Preventing Erroneous Signouts**:
+   - Resolved issue where accounts (like Administrators or newly created students without a `students` table row) caused query exceptions (`PGRST116`), which previously triggered `setIsAuthenticated(false)` and forced an unexpected logout/redirect to `/` upon visiting `/profile`.
 
 ---
 
@@ -299,14 +345,17 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 - **`server/face_service.py`**: DeepFace / OpenCV facial feature extraction & Supabase embedding vector handling.
 - **`server/sms_service.py`**: Twilio SMS notification & OTP sending functions.
 - **`server/test_parent_flow.py`**: Automated end-to-end Python test script.
-- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal and tabbed roster filters.
-- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal, live campus location metrics (**Inside/Outside Premises**), and CSV exporter.
-- **`client/src/pages/StudentDirectory.jsx`**: Master student directory with skeleton pulse loading and roster metrics (**Total Registered**, **Fully Onboarded**, **Face Biometrics Active**).
-- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page featuring tabbed navigation, multi-request prevention, biometric return verification, and server service-role deletion.
-- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal featuring tabbed segregation and administrative request row deletion.
+- **`client/src/components/Sidebar.jsx`**: Dual-mode navigation component (fixed left sidebar on desktop, fixed 5-tab bottom navigation bar on mobile for students).
+- **`client/src/components/Layout.jsx`**: Responsive layout frame with `md:pl-64` desktop offset, mobile header topbar, and `pb-24` main content wrapper.
+- **`client/src/components/ProtectedRoute.jsx`**: Route guard using `maybeSingle()` and auth session retention to prevent accidental logouts.
+- **`client/src/pages/StudentDashboard.jsx`**: Student portal with movement action cards (**Enter into Hostel**, **Normal Exit**, **Exit to Home**), skeleton loading placeholders, strict bidirectional movement state guards, 5:00 PM Return Deadline Alert System, and Supabase Realtime sync.
+- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal with live campus location metrics (**Inside Premises**, **Outside Premises**, **Students Outside After 5 PM** KPI card), interactive Overdue Report Modal (`max-w-4xl`), Supabase Realtime sync, and CSV exporter.
+- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal, cascade ID sync, and tabbed roster filters.
+- **`client/src/pages/StudentDirectory.jsx`**: Master student directory with skeleton pulse loading and roster metrics.
+- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page featuring tabbed navigation, multi-request prevention, biometric return verification, and cancellation options.
+- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal featuring tabbed segregation and strict audit compliance.
 - **`client/src/pages/ActivityLogs.jsx`**: Personal student audit history with date range filtering.
-- **`client/src/components/Sidebar.jsx`**: Sidebar navigation featuring `UserPlus` Student Onboarding link, live badge counter, and official logo.
-- **`client/src/pages/Profile.jsx`**: Student face biometric registration & profile details.
+- **`client/src/pages/Profile.jsx`**: Student/Admin face biometric registration & profile details page with resilient `maybeSingle()` queries.
 
 ---
 

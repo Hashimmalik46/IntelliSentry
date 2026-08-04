@@ -25,22 +25,25 @@ const ProtectedRoute = ({ children, requiredRole }) => {
           setIsAuthenticated(true);
         }
 
-        // Query user role from 'students' table
+        // Query user role from 'students' table gracefully
         const { data: studentRecord } = await supabase
           .from("students")
           .select("role")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
-        const role = studentRecord?.role || "student";
+        const role = studentRecord?.role || sessionStorage.getItem("user_role") || "student";
         if (isMounted) {
           setUserRole(role);
           sessionStorage.setItem("user_role", role);
           setLoading(false);
         }
       } catch (err) {
+        console.warn("Auth check notice:", err);
         if (isMounted) {
-          setIsAuthenticated(false);
+          // Retain session if user is logged in
+          const { data: { user: currentUser } } = await supabase.auth.getUser().catch(() => ({ data: {} }));
+          setIsAuthenticated(!!currentUser);
           setLoading(false);
         }
       }

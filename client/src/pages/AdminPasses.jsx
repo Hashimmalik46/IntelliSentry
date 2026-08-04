@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Key, CheckCircle2, XCircle, Clock, Search, Filter, ShieldCheck, AlertCircle, Phone, UserCheck, CheckSquare, History, Trash2 } from 'lucide-react';
+import { Key, CheckCircle2, XCircle, Clock, Search, Filter, ShieldCheck, AlertCircle, Phone, UserCheck, CheckSquare, History, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const AdminPasses = () => {
@@ -104,11 +104,13 @@ const AdminPasses = () => {
   });
 
   const headerRight = (
-    <div className="flex items-center gap-3">
-      <span className="px-3.5 py-1 bg-purple-100 text-purple-900 border border-purple-300 text-xs font-extrabold rounded-full uppercase tracking-wider font-heading shadow-xs">
-        Admin Leave Approvals
-      </span>
-    </div>
+    <button
+      onClick={fetchAllRequests}
+      className="w-9 h-9 rounded-xl bg-[#006a6a] hover:bg-[#005959] flex items-center justify-center text-white transition-colors cursor-pointer shadow-xs"
+      title="Refresh Data"
+    >
+      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+    </button>
   );
 
   return (
@@ -209,7 +211,7 @@ const AdminPasses = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse font-body">
+              <table className="w-full text-left border-collapse font-body min-w-[700px]">
                 <thead>
                   <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
                     <th className="px-6 py-4">Student Info</th>
@@ -312,14 +314,6 @@ const AdminPasses = () => {
                                 Waiting for Parent
                               </button>
                             )}
-
-                            <button
-                              onClick={() => handleAdminDelete(req.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer ml-1"
-                              title="Delete request record"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
                         </td>
 

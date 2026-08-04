@@ -51,40 +51,40 @@ const Profile = () => {
             .from('students')
             .select('*')
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle();
 
-          if (student) {
-            const regNo = student.registration_number || 'N/A';
-            const userRole = student.role ? student.role.toUpperCase() : 'STUDENT';
-            
-            setProfileData(prev => ({
-              ...prev,
-              name: student.name || user.email.split('@')[0],
-              registration_number: regNo,
-              email: student.email || user.email,
-              role: userRole === 'ADMIN' ? 'ADMINISTRATOR' : userRole,
-            }));
+          const cachedRole = sessionStorage.getItem('user_role') || 'student';
+          const regNo = student?.registration_number || 'N/A';
+          const rawRole = student?.role ? student.role.toUpperCase() : cachedRole.toUpperCase();
+          const userRole = rawRole === 'ADMIN' ? 'ADMINISTRATOR' : rawRole;
+          
+          setProfileData(prev => ({
+            ...prev,
+            name: student?.name || sessionStorage.getItem('user_name') || user.email.split('@')[0],
+            registration_number: regNo,
+            email: student?.email || user.email,
+            role: userRole,
+          }));
 
-            if (regNo && regNo !== 'N/A') {
-              const { data: uniDetails } = await supabase
-                .from('university_details')
-                .select('*')
-                .eq('registration_number', regNo)
-                .single();
+          if (regNo && regNo !== 'N/A') {
+            const { data: uniDetails } = await supabase
+              .from('university_details')
+              .select('*')
+              .eq('registration_number', regNo)
+              .maybeSingle();
 
-              if (uniDetails) {
-                setProfileData(prev => ({
-                  ...prev,
-                  hostel: uniDetails.hostel_name || 'Pending Assignment',
-                  room: uniDetails.room_number || 'Unassigned',
-                  floor: uniDetails.floor || 'N/A',
-                  warden: uniDetails.warden_name || 'Pending Assignment',
-                }));
-              }
+            if (uniDetails) {
+              setProfileData(prev => ({
+                ...prev,
+                hostel: uniDetails.hostel_name || 'Pending Assignment',
+                room: uniDetails.room_number || 'Unassigned',
+                floor: uniDetails.floor || 'N/A',
+                warden: uniDetails.warden_name || 'Pending Assignment',
+              }));
             }
-
-            await checkBiometricStatus(user.id, regNo);
           }
+
+          await checkBiometricStatus(user.id, regNo);
         }
       } catch (err) {
         console.warn("Profile fetch notice:", err);
@@ -221,7 +221,7 @@ const Profile = () => {
 
             {/* Biometrics Status Section (Show ONLY for Students, Hide for Admins) */}
             {!isAdmin && (
-              <div className={`rounded-2xl p-6 shadow-sm border flex items-center justify-between transition-all ${
+              <div className={`rounded-2xl p-5 sm:p-6 shadow-sm border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all ${
                 profileData.faceEnrolled ? 'bg-white border-gray-100' : 'bg-amber-50/50 border-amber-200'
               }`}>
                 <div className="flex items-center gap-4">

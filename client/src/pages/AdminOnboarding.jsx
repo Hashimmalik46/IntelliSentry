@@ -219,18 +219,13 @@ const AdminOnboarding = () => {
   });
 
   const headerRight = (
-    <div className="flex items-center gap-3 font-body">
-      <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-full flex items-center gap-1.5 font-heading">
-        <UserPlus className="w-3.5 h-3.5 text-amber-700" /> Student Onboarding Portal
-      </span>
-      <button
-        onClick={fetchOnboardingData}
-        className="w-9 h-9 rounded-xl bg-[#006a6a] hover:bg-[#005959] flex items-center justify-center text-white transition-colors cursor-pointer"
-        title="Refresh Data"
-      >
-        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-      </button>
-    </div>
+    <button
+      onClick={fetchOnboardingData}
+      className="w-9 h-9 rounded-xl bg-[#006a6a] hover:bg-[#005959] flex items-center justify-center text-white transition-colors cursor-pointer shadow-xs"
+      title="Refresh Data"
+    >
+      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+    </button>
   );
 
   return (
@@ -311,7 +306,7 @@ const AdminOnboarding = () => {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
                   <th className="px-6 py-4">Student Details</th>
