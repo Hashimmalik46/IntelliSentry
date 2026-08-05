@@ -1,6 +1,10 @@
-pyproj
-shapely
 flask
 flask-cors
-python-dotenv
 gunicorn
+numpy
+opencv-python-headless
+pyproj
+python-dotenv
+requests
+shapely
+twilio
