@@ -111,7 +111,7 @@ const AdminOnboarding = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    const regId = formState.registration_number.trim();
+    const regId = formState.registration_number.trim().toUpperCase();
     if (!regId) {
       setSaveMsg({ error: true, message: 'Registration ID (reg_id) is required.' });
       return;
@@ -121,6 +121,27 @@ const AdminOnboarding = () => {
     setSaveMsg(null);
 
     try {
+      // 0. Pre-check: Verify if Registration ID is already assigned to ANOTHER student
+      const { data: existingStudent, error: checkErr } = await supabase
+        .from('students')
+        .select('id, name, email')
+        .neq('id', editingStudent.id)
+        .ilike('registration_number', regId)
+        .maybeSingle();
+
+      if (checkErr && checkErr.code !== 'PGRST116') {
+        console.warn('Registration ID pre-check notice:', checkErr);
+      }
+
+      if (existingStudent) {
+        setSaveMsg({
+          error: true,
+          message: `Registration ID "${regId}" is already assigned to student ${existingStudent.name || existingStudent.email}.`
+        });
+        setIsSaving(false);
+        return;
+      }
+
       // 1. Update Student Table (Set registration_number & status = ACTIVE)
       let { error: studentErr } = await supabase
         .from('students')
@@ -199,7 +220,11 @@ const AdminOnboarding = () => {
       }, 1000);
     } catch (err) {
       console.error("Save profile error:", err);
-      setSaveMsg({ error: true, message: err.message || 'Failed to save student profile.' });
+      let errMsg = err.message || 'Failed to save student profile.';
+      if (errMsg.includes('students_registration_number_key') || errMsg.includes('duplicate key')) {
+        errMsg = `Registration ID "${regId}" is already assigned to another student.`;
+      }
+      setSaveMsg({ error: true, message: errMsg });
     } finally {
       setIsSaving(false);
     }

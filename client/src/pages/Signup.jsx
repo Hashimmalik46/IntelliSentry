@@ -22,38 +22,75 @@ function Signup() {
     setSuccessMsg("");
     setIsLoading(true);
 
+    const formattedRegNo = regNo.trim().toUpperCase();
+    const formattedEmail = email.trim().toLowerCase();
+
     try {
+      // 1. Pre-check: Verify Registration Number uniqueness before creating Auth account
+      const { data: existingReg } = await supabase
+        .from("students")
+        .select("id, name, email")
+        .ilike("registration_number", formattedRegNo)
+        .maybeSingle();
+
+      if (existingReg) {
+        throw new Error(
+          `Registration Number "${formattedRegNo}" is already registered. Please check your Registration ID or sign in.`
+        );
+      }
+
+      // 2. Pre-check: Verify Email uniqueness in students table
+      const { data: existingEmail } = await supabase
+        .from("students")
+        .select("id")
+        .ilike("email", formattedEmail)
+        .maybeSingle();
+
+      if (existingEmail) {
+        throw new Error(
+          `The email address "${formattedEmail}" is already registered. Please sign in instead.`
+        );
+      }
+
+      // 3. Create Supabase Auth User
       const {
         data: authData,
         error: authError,
       } = await supabase.auth.signUp({
-        email: email,
+        email: formattedEmail,
         password: password,
       });
 
       if (authError) throw authError;
       if (!authData.user) throw new Error("Signup failed. Please try again.");
 
+      // 4. Insert Student Record
       const { error: dbError } = await supabase.from("students").insert([
         {
           user_id: authData.user.id,
-          name: name,
-          email: email,
-          phone: phone,
-          registration_number: regNo,
-          role: "student"
+          name: name.trim(),
+          email: formattedEmail,
+          phone: phone.trim(),
+          registration_number: formattedRegNo,
+          role: "student",
         },
       ]);
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        if (dbError.message?.includes("students_registration_number_key") || dbError.message?.includes("duplicate key")) {
+          throw new Error(`Registration Number "${formattedRegNo}" is already registered.`);
+        }
+        throw dbError;
+      }
 
+      // 5. Upsert University Details Record
       const { error: uniError } = await supabase.from("university_details").upsert([
         {
-          registration_number: regNo,
+          registration_number: formattedRegNo,
           parent_name: null,
-          parent_phone: null
-        }
-      ], { onConflict: 'registration_number' });
+          parent_phone: null,
+        },
+      ], { onConflict: "registration_number" });
 
       if (uniError) {
         console.warn("University details upsert notice:", uniError);
@@ -65,7 +102,7 @@ function Signup() {
       setPassword("");
       setPhone("");
       setRegNo("");
-      
+
       setTimeout(() => {
         navigate("/");
       }, 2000);
