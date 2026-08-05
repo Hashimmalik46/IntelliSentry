@@ -3,3 +3,4 @@ shapely
 flask
 flask-cors
 python-dotenv
+gunicorn
