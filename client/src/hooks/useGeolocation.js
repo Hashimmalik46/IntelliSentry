@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE_URL } from "../apiConfig";
 
 export function useGeolocation() {
   const [isLoading, setIsLoading] = useState(false);
@@ -7,7 +8,7 @@ export function useGeolocation() {
 
   async function sendLocation(position) {
     try {
-      const res = await fetch("http://127.0.0.1:5000/location-status", {
+      const res = await fetch(`${API_BASE_URL}/location-status`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

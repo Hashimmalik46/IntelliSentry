@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { MapPin, ShieldCheck, Camera, CheckCircle2, XCircle, AlertCircle, RefreshCw, X } from "lucide-react";
 import CameraCapture from "./Camera";
 import { supabase } from "../supabaseClient";
+import { API_BASE_URL } from "../apiConfig";
 
 const VerificationModal = ({ isOpen, onClose, mode = "Entry", exitType = "NORMAL_EXIT", activePass = null, studentInfo = {}, onSuccess }) => {
   const [step, setStep] = useState(1); // 1: Geofence, 2: Camera, 3: Verifying, 4: Result
@@ -46,7 +47,7 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", exitType = "NORMAL
         };
 
         try {
-          const res = await fetch("http://127.0.0.1:5000/location-status", {
+          const res = await fetch(`${API_BASE_URL}/location-status`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(coords),
@@ -85,7 +86,7 @@ const VerificationModal = ({ isOpen, onClose, mode = "Entry", exitType = "NORMAL
     setVerifying(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/verify-face", {
+      const res = await fetch(`${API_BASE_URL}/verify-face`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

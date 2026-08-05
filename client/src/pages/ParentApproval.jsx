@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ShieldCheck, CheckCircle2, XCircle, Clock, Lock, Phone, AlertCircle, Smartphone, KeyRound, RefreshCw, Check } from 'lucide-react';
+import { API_BASE_URL } from '../apiConfig';
 
 const ParentApproval = () => {
   const { token } = useParams();
@@ -42,7 +43,7 @@ const ParentApproval = () => {
           return;
         }
 
-        const res = await fetch("http://127.0.0.1:5000/api/parent/verify-token", {
+        const res = await fetch(`${API_BASE_URL}/api/parent/verify-token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token })
@@ -78,7 +79,7 @@ const ParentApproval = () => {
     setOtpError('');
     setOtpNotice('');
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/parent/send-otp", {
+      const res = await fetch(`${API_BASE_URL}/api/parent/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token })
@@ -114,7 +115,7 @@ const ParentApproval = () => {
     setOtpVerifying(true);
     setOtpError('');
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/parent/verify-otp", {
+      const res = await fetch(`${API_BASE_URL}/api/parent/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, otp: otpCode })
@@ -140,7 +141,7 @@ const ParentApproval = () => {
 
     setActionLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/parent/submit-decision", {
+      const res = await fetch(`${API_BASE_URL}/api/parent/submit-decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, decision: status })

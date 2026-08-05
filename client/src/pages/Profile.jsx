@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { User, Mail, Shield, Building, Key, CheckCircle2, Lock, Camera, X, AlertCircle, ShieldAlert, FileSpreadsheet, Users } from 'lucide-react';
 import CameraCapture from '../components/Camera';
 import { supabase } from '../supabaseClient';
+import { API_BASE_URL } from '../apiConfig';
 
 const Profile = () => {
   const [profileData, setProfileData] = useState({
@@ -109,7 +110,7 @@ const Profile = () => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const res = await fetch("http://127.0.0.1:5000/enroll-face", {
+      const res = await fetch(`${API_BASE_URL}/enroll-face`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

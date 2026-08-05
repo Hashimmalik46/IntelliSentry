@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Key, CheckCircle2, XCircle, Clock, Search, Filter, ShieldCheck, AlertCircle, Phone, UserCheck, CheckSquare, History, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { API_BASE_URL } from '../apiConfig';
 
 const AdminPasses = () => {
   const [requests, setRequests] = useState([]);
@@ -57,7 +58,7 @@ const AdminPasses = () => {
     try {
       // 1. Forceful delete via Backend Server API (service role bypasses RLS)
       try {
-        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, {
+        await fetch(`${API_BASE_URL}/delete-pass-request/${requestId}`, {
           method: "DELETE"
         });
       } catch (e) {}

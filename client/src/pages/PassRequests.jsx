@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { Key, Plus, Clock, CheckCircle2, XCircle, AlertCircle, Calendar, Send, Smartphone, ExternalLink, CheckSquare, Trash2, History, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import VerificationModal from '../components/VerificationModal';
+import { API_BASE_URL } from '../apiConfig';
 
 const PassRequests = () => {
   const [studentInfo, setStudentInfo] = useState({
@@ -115,7 +116,7 @@ const PassRequests = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch("http://127.0.0.1:5000/create-pass-request", {
+      const response = await fetch(`${API_BASE_URL}/create-pass-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +203,7 @@ const PassRequests = () => {
     try {
       // 1. Forceful delete via Backend Server API (service role bypasses RLS)
       try {
-        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, {
+        await fetch(`${API_BASE_URL}/delete-pass-request/${requestId}`, {
           method: "DELETE"
         });
       } catch (backendErr) {
@@ -217,7 +218,7 @@ const PassRequests = () => {
     } catch (err) {
       console.error("Cancel pass error:", err);
       try {
-        await fetch(`http://127.0.0.1:5000/delete-pass-request/${requestId}`, { method: "DELETE" });
+        await fetch(`${API_BASE_URL}/delete-pass-request/${requestId}`, { method: "DELETE" });
       } catch (e) {}
       setRequests(prev => prev.filter(r => r.id !== requestId));
       setDeleteConfirmId(null);
