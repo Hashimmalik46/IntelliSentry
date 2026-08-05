@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { ShieldCheck } from "lucide-react";
 
 const ProtectedRoute = ({ children, requiredRole }) => {
   const [loading, setLoading] = useState(true);
@@ -55,9 +56,16 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-700 font-body">
-        <div className="w-10 h-10 border-4 border-[#006a6a] border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p className="text-xs font-semibold font-heading">Verifying security authorization...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafb] p-4">
+        <div className="relative flex items-center justify-center">
+          {/* Radar Ring Pulse */}
+          <div className="absolute w-20 h-20 rounded-full bg-teal-400/20 animate-ping" />
+          
+          {/* Shield Badge */}
+          <div className="relative w-16 h-16 rounded-2xl bg-white border border-teal-100 shadow-xl flex items-center justify-center text-[#006a6a]">
+            <ShieldCheck className="w-9 h-9 animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
