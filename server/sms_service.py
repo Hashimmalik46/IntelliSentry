@@ -1,8 +1,9 @@
 import os
 
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip().strip('"').strip("'")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip().strip('"').strip("'")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "").strip().strip('"').strip("'").replace(" ", "")
+
 
 def format_phone_number(phone):
     if not phone:
