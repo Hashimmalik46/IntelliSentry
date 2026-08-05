@@ -314,10 +314,11 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 - Admins onboard new pending students by completing hostel assignment, parent contacts, and registration IDs.
 - **Cascade Sync**: Automatically updates linked records across `face_embeddings`, `pass_requests`, and `attendance_logs`.
 
-### G. Render Cloud Deployment Readiness
+### G. Render Cloud Deployment Readiness & SPA Rewrite Rules
 - Backend includes `opencv-python-headless` (prevents `libGL.so.1` Linux load crashes).
 - Port binding uses `port = int(os.environ.get("PORT", 5000))`.
 - Start Command: `gunicorn --bind 0.0.0.0:$PORT app:app`.
+- **SPA 404 Refresh Fix**: Includes `client/public/_redirects` (`/* /index.html 200`) and `client/vercel.json` to prevent 404 errors on page refresh for deployed React router URLs (Render, Netlify, Vercel).
 
 ---
 
