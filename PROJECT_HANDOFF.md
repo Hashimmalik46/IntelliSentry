@@ -25,7 +25,8 @@
 
 - **Frontend**: React.js (Vite), TailwindCSS, Lucide React Icons, Supabase JS Client v2, React Router DOM.
 - **Backend Server**: Python 3.12, Flask, Flask-CORS, Gunicorn, OpenCV (`opencv-python-headless`), DeepFace, Haversine Geofencing, Twilio REST API SDK.
-- **Production Host**: Configured for **Render** (`gunicorn --bind 0.0.0.0:$PORT app:app`).
+- **Frontend Host**: Deployed on **Vercel** (`https://intellisentry.vercel.app`).
+- **Backend Host**: Deployed on **Render** (`https://intellisentry.onrender.com` / `gunicorn --bind 0.0.0.0:$PORT app:app`).
 - **Database & Authentication**: Supabase PostgreSQL with Row Level Security (RLS) policies.
 - **Virtual Environment Path**: `c:\Users\91903\Desktop\Coding\IntelliSentry\.venv\Scripts\python.exe`
 - **Geofence Boundary Configuration**:
@@ -295,14 +296,17 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 4. **Backend API Bypass (`bypass_curfew`)**:
    - `/verify-face` accepts `"bypass_curfew": true` in POST payload to override curfew checks for warden APIs.
 
-### D. Secure Parent Pass & 2FA OTP Request Flow
+### D. Secure Parent Pass & 2FA OTP Request Flow via Twilio
 1. **Creation (`POST /create-pass-request`)**:
    - Student submits pass request on `/pass-requests`.
    - Backend automatically queries `public.university_details` by `registration_number` to pull official `parent_name` & `parent_phone`.
    - Generates cryptographically secure single-use 24-hour token (`secrets.token_urlsafe(32)`).
-   - Delivers link via Twilio SMS.
+   - Generates approval URL pointing to production frontend domain (`https://intellisentry.vercel.app/parent-approval/<token>`).
+   - Formats phone numbers automatically (`format_phone_number()`) to E.164 standard (`+916005674521`).
+   - Dispatches live SMS notification to parent via Twilio.
 2. **Parent OTP Authorization (`ParentApproval.jsx`)**:
    - Parent opens `/parent-approval/<token>` -> requests 6-digit OTP SMS -> verifies OTP -> approves or rejects request.
+   - 6-digit OTP is generated on backend via Python's secure `secrets` module, valid for 10 minutes, with 60-second resend rate limits and 5-attempt locking.
 3. **Warden / Admin Final Pass Approval (`AdminPasses.jsx`)**:
    - Admin grants final approval (`APPROVED`).
 
@@ -320,10 +324,14 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
    - Admins onboard new pending students by completing hostel assignment, parent contacts, and registration IDs.
    - **Cascade Sync**: Automatically updates linked records across `face_embeddings`, `pass_requests`, and `attendance_logs`.
 
-### G. Render Cloud Deployment Readiness & SPA Rewrite Rules
-- Backend includes `opencv-python-headless` (prevents `libGL.so.1` Linux load crashes).
-- Port binding uses `port = int(os.environ.get("PORT", 5000))`.
-- Start Command: `gunicorn --bind 0.0.0.0:$PORT app:app`.
+### G. Render & Vercel Cloud Deployment Configuration
+- **Central API Base URL Config (`client/src/apiConfig.js`)**:
+  - Dynamically switches between production backend (`https://intellisentry.onrender.com`) and local development (`http://127.0.0.1:5000`) based on `VITE_API_BASE_URL`.
+- **Backend Credential Sanitization (`server/sms_service.py`)**:
+  - Auto-strips trailing spaces, newlines, and quotes from `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` to prevent 404/401 API errors on Render.
+- **Headless Linux Fix**: Backend includes `opencv-python-headless` (prevents `libGL.so.1` Linux load crashes).
+- **Port Binding**: Port binding uses `port = int(os.environ.get("PORT", 5000))`.
+- **Start Command**: `gunicorn --bind 0.0.0.0:$PORT app:app`.
 - **SPA 404 Refresh Fix**: Includes `client/public/_redirects` (`/* /index.html 200`) and `client/vercel.json` to prevent 404 errors on page refresh for deployed React router URLs (Render, Netlify, Vercel).
 
 ---
@@ -331,7 +339,9 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 ## 7. Key Source Code Files
 
 - **`server/app.py`**: Flask server API endpoints & Render deployment port binding.
+- **`server/sms_service.py`**: Twilio SMS & OTP notification module with E.164 phone formatting and environment sanitization.
 - **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
+- **`client/src/apiConfig.js`**: Centralized API Base URL configuration for Vercel/Render production environments.
 - **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module.
 - **`client/src/pages/Signup.jsx`**: Student registration page with Registration ID & Email uniqueness pre-checks, case normalization, and Auth account creation.
 - **`client/src/pages/StudentDashboard.jsx`**: Student portal with dynamic curfew locks, warning banners, movement cards, and Warden Contact Info modal.
