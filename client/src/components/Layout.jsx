@@ -7,10 +7,10 @@ import { supabase } from '../supabaseClient';
 const Layout = ({ children, headerRight }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState(() => {
-    return sessionStorage.getItem('user_name') || 'User';
+    return localStorage.getItem('user_name') || sessionStorage.getItem('user_name') || 'User';
   });
   const [userRole, setUserRole] = useState(() => {
-    return sessionStorage.getItem('user_role') || 'student';
+    return localStorage.getItem('user_role') || sessionStorage.getItem('user_role') || 'student';
   });
 
   useEffect(() => {
@@ -29,6 +29,8 @@ const Layout = ({ children, headerRight }) => {
             const roleStr = studentRecord.role || 'student';
             setUserName(nameStr);
             setUserRole(roleStr);
+            localStorage.setItem('user_name', nameStr);
+            localStorage.setItem('user_role', roleStr);
             sessionStorage.setItem('user_name', nameStr);
             sessionStorage.setItem('user_role', roleStr);
           }

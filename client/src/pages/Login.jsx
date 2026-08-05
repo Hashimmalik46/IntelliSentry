@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle2, Shield } from "lucide-react";
+import { AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 function Login() {
@@ -10,7 +10,48 @@ function Login() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkExistingSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          // User has active stored session token in localStorage
+          const { data: studentRecord } = await supabase
+            .from("students")
+            .select("role, name")
+            .eq("user_id", session.user.id)
+            .maybeSingle();
+
+          const role = studentRecord?.role || localStorage.getItem("user_role") || "student";
+          const name = studentRecord?.name || session.user.email?.split("@")[0] || "User";
+          
+          localStorage.setItem("user_role", role);
+          localStorage.setItem("user_name", name);
+          sessionStorage.setItem("user_role", role);
+          sessionStorage.setItem("user_name", name);
+
+          if (role === "admin") {
+            navigate("/admin", { replace: true });
+          } else {
+            navigate("/studentportal", { replace: true });
+          }
+          return;
+        }
+      } catch (err) {
+        console.warn("Session check notice:", err);
+      } finally {
+        if (isMounted) setIsCheckingAuth(false);
+      }
+    }
+
+    checkExistingSession();
+    return () => { isMounted = false; };
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -21,7 +62,7 @@ function Login() {
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword(
         {
-          email: email,
+          email: email.trim(),
           password: password,
         },
       );
@@ -34,11 +75,19 @@ function Login() {
       // Query student/user role from Supabase
       const { data: studentRecord } = await supabase
         .from("students")
-        .select("role")
+        .select("role, name")
         .eq("user_id", data.user.id)
-        .single();
+        .maybeSingle();
 
-      if (studentRecord && studentRecord.role === "admin") {
+      const role = studentRecord?.role || "student";
+      const name = studentRecord?.name || data.user.email?.split("@")[0] || "User";
+
+      localStorage.setItem("user_role", role);
+      localStorage.setItem("user_name", name);
+      sessionStorage.setItem("user_role", role);
+      sessionStorage.setItem("user_name", name);
+
+      if (role === "admin") {
         navigate("/admin");
       } else {
         navigate("/studentportal");
@@ -49,6 +98,20 @@ function Login() {
       setIsLoading(false);
     }
   };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafb] p-4 font-body">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute w-20 h-20 rounded-full bg-teal-400/20 animate-ping" />
+          <div className="relative w-16 h-16 rounded-2xl bg-white border border-teal-100 shadow-xl flex items-center justify-center text-[#006a6a]">
+            <ShieldCheck className="w-9 h-9 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen w-full flex justify-center items-center bg-gray-50 p-4 font-body">

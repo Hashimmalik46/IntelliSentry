@@ -33,9 +33,10 @@ const ProtectedRoute = ({ children, requiredRole }) => {
           .eq("user_id", user.id)
           .maybeSingle();
 
-        const role = studentRecord?.role || sessionStorage.getItem("user_role") || "student";
+        const role = studentRecord?.role || localStorage.getItem("user_role") || sessionStorage.getItem("user_role") || "student";
         if (isMounted) {
           setUserRole(role);
+          localStorage.setItem("user_role", role);
           sessionStorage.setItem("user_role", role);
           setLoading(false);
         }

@@ -15,6 +15,7 @@
 - **Pre-Curfew Warning Alert Banners & Overdue Tracking**
 - **Multi-Level Warden Emergency Override System**
 - **Dedicated Admin Student Onboarding Portal & Profile Activation**
+- **Strict Registration ID & Email Uniqueness Enforcement (Signup & Onboarding Pre-Checks)**
 - **Fully Responsive Layout & Mobile Bottom Navigation Bar (5-Tab Access)**
 - **Render Production Deployment Configuration**
 
@@ -310,9 +311,14 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 2. **Normal Exit**: Local outings during standard non-curfew hours.
 3. **Exit to Home**: Requires approved Leave Pass and non-curfew hours.
 
-### F. Dedicated Student Onboarding Portal (`AdminOnboarding.jsx`)
-- Admins onboard new pending students by completing hostel assignment, parent contacts, and registration IDs.
-- **Cascade Sync**: Automatically updates linked records across `face_embeddings`, `pass_requests`, and `attendance_logs`.
+### F. Dedicated Student Onboarding & Registration Security (`AdminOnboarding.jsx` & `Signup.jsx`)
+1. **Strict Registration ID & Email Uniqueness Enforcement**:
+   - **Student Signup (`Signup.jsx`)**: Pre-checks Registration ID (`registration_number.ilike`) and Email (`email.ilike`) against `public.students` *before* calling `supabase.auth.signUp()`. This prevents orphaned Auth accounts and provides clean error messages (e.g., `"Registration Number 'IUST...' is already registered"`).
+   - **Admin Onboarding (`AdminOnboarding.jsx`)**: Pre-checks if the assigned `registration_number` belongs to another student (`id != current_student.id`) before updating database records, displaying explicit warning messages if a conflict occurs.
+   - **Uppercase Normalization**: Both Signup and Admin Onboarding automatically trim and convert all Registration IDs to uppercase (`trim().toUpperCase()`) for consistent database collation.
+2. **Profile Activation & Cascade Sync**:
+   - Admins onboard new pending students by completing hostel assignment, parent contacts, and registration IDs.
+   - **Cascade Sync**: Automatically updates linked records across `face_embeddings`, `pass_requests`, and `attendance_logs`.
 
 ### G. Render Cloud Deployment Readiness & SPA Rewrite Rules
 - Backend includes `opencv-python-headless` (prevents `libGL.so.1` Linux load crashes).
@@ -327,9 +333,10 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 - **`server/app.py`**: Flask server API endpoints & Render deployment port binding.
 - **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
 - **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module.
+- **`client/src/pages/Signup.jsx`**: Student registration page with Registration ID & Email uniqueness pre-checks, case normalization, and Auth account creation.
 - **`client/src/pages/StudentDashboard.jsx`**: Student portal with dynamic curfew locks, warning banners, movement cards, and Warden Contact Info modal.
 - **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal with **`⚙️ Curfew Config`** modal, overdue student tracking, Warden Authorize Entry/Exit clearance buttons, and CSV exporter.
-- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal and cascade ID sync.
+- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal, Registration ID conflict validation, and cascade ID sync.
 - **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page with biometric return auto-completion.
 - **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal.
 - **`client/src/components/VerificationModal.jsx`**: Geofence GPS + Biometric camera verification modal.

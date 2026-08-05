@@ -53,14 +53,14 @@ const Profile = () => {
             .eq('user_id', user.id)
             .maybeSingle();
 
-          const cachedRole = sessionStorage.getItem('user_role') || 'student';
+          const cachedRole = localStorage.getItem('user_role') || sessionStorage.getItem('user_role') || 'student';
           const regNo = student?.registration_number || 'N/A';
           const rawRole = student?.role ? student.role.toUpperCase() : cachedRole.toUpperCase();
           const userRole = rawRole === 'ADMIN' ? 'ADMINISTRATOR' : rawRole;
           
           setProfileData(prev => ({
             ...prev,
-            name: student?.name || sessionStorage.getItem('user_name') || user.email.split('@')[0],
+            name: student?.name || localStorage.getItem('user_name') || sessionStorage.getItem('user_name') || user.email.split('@')[0],
             registration_number: regNo,
             email: student?.email || user.email,
             role: userRole,

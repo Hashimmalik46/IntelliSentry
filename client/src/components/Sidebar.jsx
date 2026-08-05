@@ -8,11 +8,12 @@ const Sidebar = () => {
 
   // Single source of truth role state initialized from cached session
   const [isAdmin, setIsAdmin] = useState(() => {
-    return sessionStorage.getItem('user_role') === 'admin';
+    const role = localStorage.getItem('user_role') || sessionStorage.getItem('user_role');
+    return role === 'admin';
   });
 
   const [userName, setUserName] = useState(() => {
-    return sessionStorage.getItem('user_name') || 'User';
+    return localStorage.getItem('user_name') || sessionStorage.getItem('user_name') || 'User';
   });
 
   const [pendingPassCount, setPendingPassCount] = useState(0);
@@ -38,6 +39,8 @@ const Sidebar = () => {
             setIsAdmin(adminStatus);
             setUserName(nameStr);
 
+            localStorage.setItem('user_role', studentRecord.role || 'student');
+            localStorage.setItem('user_name', nameStr);
             sessionStorage.setItem('user_role', studentRecord.role || 'student');
             sessionStorage.setItem('user_name', nameStr);
 
