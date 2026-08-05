@@ -126,18 +126,18 @@ const AdminPasses = () => {
         </div>
 
         {/* Tab Navigation Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs max-w-full overflow-hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0 max-w-full shrink-0">
             <button
               onClick={() => { setActiveTab('PENDING'); setFilterStatus('ALL'); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'PENDING'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Clock className="w-4 h-4" /> Current Pending Requests
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Pending Requests
+              <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded-full font-mono shrink-0 ${
                 activeTab === 'PENDING' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
               }`}>
                 {pendingCount}
@@ -146,14 +146,14 @@ const AdminPasses = () => {
 
             <button
               onClick={() => { setActiveTab('HISTORY'); setFilterStatus('ALL'); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'HISTORY'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <History className="w-4 h-4" /> Request History
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+              <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Request History
+              <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded-full font-mono shrink-0 ${
                 activeTab === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
                 {historyCount}
@@ -162,7 +162,7 @@ const AdminPasses = () => {
 
             <button
               onClick={() => { setActiveTab('ALL'); setFilterStatus('ALL'); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'ALL'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -211,14 +211,14 @@ const AdminPasses = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse font-body min-w-[700px]">
+              <table className="w-full text-left border-collapse font-body min-w-[950px]">
                 <thead>
                   <tr className="bg-[#f8fafb] text-[11px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-100 font-heading">
-                    <th className="px-6 py-4">Student Info</th>
-                    <th className="px-6 py-4">Leave Details</th>
-                    <th className="px-6 py-4">Parent Contact & Status</th>
-                    <th className="px-6 py-4">Admin Status</th>
-                    <th className="px-6 py-4 text-right">Action</th>
+                    <th className="px-6 py-4 min-w-[180px]">Student Info</th>
+                    <th className="px-6 py-4 min-w-[320px] w-2/5">Leave Details</th>
+                    <th className="px-6 py-4 min-w-[200px]">Parent Contact & Status</th>
+                    <th className="px-6 py-4 min-w-[180px]">Admin Status</th>
+                    <th className="px-6 py-4 min-w-[140px] text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -226,19 +226,21 @@ const AdminPasses = () => {
                     filteredRequests.map((req) => (
                       <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
                         
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 min-w-[180px]">
                           <p className="font-bold text-gray-900 text-sm font-heading">{req.student_name}</p>
                           <p className="text-xs font-mono font-semibold text-[#006a6a]">{req.registration_number}</p>
                         </td>
 
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 text-[10px] font-bold rounded-md font-heading">
+                        <td className="px-6 py-4 min-w-[320px]">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 text-[10px] font-bold rounded-md font-heading inline-block">
                             {req.leave_type}
                           </span>
-                          <p className="text-xs text-gray-700 font-medium mt-1">{req.reason}</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">
-                            {req.leave_date} ({req.leave_time}) ➔ {req.return_date} ({req.return_time})
-                          </p>
+                          <p className="text-xs text-gray-700 font-medium mt-1 leading-relaxed">{req.reason}</p>
+                          <div className="text-[11px] text-gray-600 mt-1.5 font-mono flex items-center gap-1.5 flex-wrap whitespace-nowrap">
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-semibold">{req.leave_date} ({req.leave_time})</span>
+                            <span className="text-gray-400 font-bold">➔</span>
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-semibold">{req.return_date} ({req.return_time})</span>
+                          </div>
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap">

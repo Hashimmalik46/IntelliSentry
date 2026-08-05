@@ -275,18 +275,18 @@ const PassRequests = () => {
         </div>
 
         {/* Tab Navigation Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs font-body">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-xs font-body max-w-full overflow-hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0 max-w-full shrink-0">
             <button
               onClick={() => setActiveTab('ACTIVE')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'ACTIVE'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Clock className="w-4 h-4" /> Active / Pending Pass
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Active / Pending Pass
+              <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded-full font-mono shrink-0 ${
                 activeTab === 'ACTIVE' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
               }`}>
                 {activeRequests.length}
@@ -295,14 +295,14 @@ const PassRequests = () => {
 
             <button
               onClick={() => setActiveTab('HISTORY')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'HISTORY'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <History className="w-4 h-4" /> Pass History
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono ${
+              <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Pass History
+              <span className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] rounded-full font-mono shrink-0 ${
                 activeTab === 'HISTORY' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
                 {historyRequests.length}
@@ -311,7 +311,7 @@ const PassRequests = () => {
 
             <button
               onClick={() => setActiveTab('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-heading transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold font-heading transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'ALL'
                   ? 'bg-[#006a6a] text-white shadow-sm'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'

@@ -254,34 +254,34 @@ const AdminOnboarding = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           
           {/* Header & Controls */}
-          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-full overflow-hidden">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0 max-w-full shrink-0">
               {/* Tab Filters */}
               <button
                 onClick={() => setActiveTab('PENDING')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all font-heading cursor-pointer flex items-center gap-2 ${
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all font-heading cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeTab === 'PENDING'
                     ? 'bg-amber-500 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5" /> Pending Setup ({pendingList.length})
+                <Clock className="w-3.5 h-3.5 shrink-0" /> Pending Setup ({pendingList.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('ACTIVE')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all font-heading cursor-pointer flex items-center gap-2 ${
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all font-heading cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeTab === 'ACTIVE'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Completed Profiles ({activeList.length})
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Completed Profiles ({activeList.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('ALL')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all font-heading cursor-pointer ${
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all font-heading cursor-pointer whitespace-nowrap shrink-0 ${
                   activeTab === 'ALL'
                     ? 'bg-[#006a6a] text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
