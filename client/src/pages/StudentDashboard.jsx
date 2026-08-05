@@ -384,23 +384,23 @@ const StudentDashboard = () => {
   };
 
   const headerRight = (
-    <div className="flex items-center gap-3 font-body">
+    <div className="flex items-center gap-2 sm:gap-3 font-body min-w-0">
       {loading ? (
-        <div className="flex items-center gap-3 animate-pulse">
-          <div className="w-9 h-9 rounded-full bg-slate-200 shrink-0"></div>
-          <div className="space-y-1.5 text-left">
-            <div className="w-28 h-3 bg-slate-200 rounded-full"></div>
-            <div className="w-20 h-2.5 bg-slate-200 rounded-full"></div>
+        <div className="flex items-center gap-2 animate-pulse">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-slate-200 shrink-0"></div>
+          <div className="space-y-1 text-left">
+            <div className="w-20 sm:w-28 h-2.5 sm:h-3 bg-slate-200 rounded-full"></div>
+            <div className="w-14 sm:w-20 h-2 sm:h-2.5 bg-slate-200 rounded-full"></div>
           </div>
         </div>
       ) : (
-        <Link to="/profile" className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer">
-          <div className="w-9 h-9 rounded-full bg-[#006a6a] text-white flex items-center justify-center font-bold text-sm font-heading shadow-xs shrink-0">
+        <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-opacity cursor-pointer min-w-0">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-[#006a6a] text-white flex items-center justify-center font-bold text-xs sm:text-sm font-heading shadow-xs shrink-0">
             {studentInfo.name.charAt(0).toUpperCase()}
           </div>
-          <div className="text-left">
-            <p className="text-xs font-bold text-gray-900 font-heading">Welcome, {studentInfo.name}</p>
-            <p className="text-[11px] font-mono font-semibold text-[#006a6a]">Reg ID: {studentInfo.registration_number}</p>
+          <div className="text-left min-w-0">
+            <p className="text-[10px] sm:text-xs font-bold text-gray-900 font-heading leading-tight truncate max-w-[85px] xs:max-w-[120px] sm:max-w-none">{studentInfo.name}</p>
+            <p className="text-[9px] sm:text-[11px] font-mono font-semibold text-[#006a6a] leading-tight truncate max-w-[85px] xs:max-w-[120px] sm:max-w-none">{studentInfo.registration_number}</p>
           </div>
         </Link>
       )}
