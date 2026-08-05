@@ -275,7 +275,10 @@ def create_pass_request():
 
     # Attach token to returned object
     new_req["token"] = token
-    approval_url = f"{origin}/parent-approval/{token}"
+
+    # Use production domain for SMS approval link
+    frontend_domain = os.getenv("FRONTEND_URL", "https://intellisentry.vercel.app").rstrip("/")
+    approval_url = f"{frontend_domain}/parent-approval/{token}"
 
     # Send SMS notification via Twilio
     sms_res = send_parent_sms_notification(parent_phone, student_name, leave_type, approval_url)
