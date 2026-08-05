@@ -105,9 +105,20 @@ def verify_face():
     landmarks = data.get("landmarks")
     user_id = data.get("user_id")
     registration_number = data.get("registration_number")
+    bypass_curfew = data.get("bypass_curfew", False)
 
     if not image:
         return jsonify({"error": "image is required"}), 400
+
+    # Backend curfew guardrail (5:00 PM - 8:00 AM)
+    current_hour = datetime.now().hour
+    if (current_hour >= 17 or current_hour < 8) and not bypass_curfew:
+        return jsonify({
+            "verified": False,
+            "curfew_blocked": True,
+            "confidence": 0,
+            "message": "CURFEW ACCESS DENIED: Hostel gate entry and exit are strictly disabled between 5:00 PM and 8:00 AM. Please contact warden for emergency clearance."
+        }), 403
 
     try:
         result = verify_face_against_supabase(

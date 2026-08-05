@@ -11,27 +11,31 @@
 - **Facial Biometric Embedding Authentication (DeepFace / OpenCV)**
 - **Automated Parent 2FA SMS Verification via Twilio**
 - **Split Exit Movement Control (Normal Exit vs Leave to Home)**
+- **Dynamic Curfew Engine & Custom Gate Hour Controls**
+- **Pre-Curfew Warning Alert Banners & Overdue Tracking**
+- **Multi-Level Warden Emergency Override System**
 - **Dedicated Admin Student Onboarding Portal & Profile Activation**
 - **Fully Responsive Layout & Mobile Bottom Navigation Bar (5-Tab Access)**
-- **Real-Time Admin Oversight & Master Access Audit Logs**
+- **Render Production Deployment Configuration**
 
 ---
 
 ## 2. Technology Stack & Environment
 
 - **Frontend**: React.js (Vite), TailwindCSS, Lucide React Icons, Supabase JS Client v2, React Router DOM.
-- **Backend Server**: Python 3.12, Flask, Flask-CORS, DeepFace / OpenCV, Haversine Geofencing, Twilio REST API SDK.
+- **Backend Server**: Python 3.12, Flask, Flask-CORS, Gunicorn, OpenCV (`opencv-python-headless`), DeepFace, Haversine Geofencing, Twilio REST API SDK.
+- **Production Host**: Configured for **Render** (`gunicorn --bind 0.0.0.0:$PORT app:app`).
 - **Database & Authentication**: Supabase PostgreSQL with Row Level Security (RLS) policies.
 - **Virtual Environment Path**: `c:\Users\91903\Desktop\Coding\IntelliSentry\.venv\Scripts\python.exe`
 - **Geofence Boundary Configuration**:
-  - Campus Center: Latitude `33.9255`, Longitude `74.9080` (IUST Campus)
-  - Radius Threshold: `200 meters` (Configurable in `server/haversine_check.py`, with Developer Location Bypass option in frontend modal)
+  - Campus Center: Latitude `34.056423`, Longitude `74.948681`
+  - Radius Threshold: `500 meters` (Configurable in `server/app.py`, with Developer Location Bypass option in frontend modal)
 
 ---
 
 ## 3. Complete Database Schema & Structure
 
-The system uses 5 core tables in Supabase (`public` schema):
+The system uses 6 core tables in Supabase (`public` schema):
 
 ### Table 1: `public.students`
 Stores registered student profile accounts.
@@ -95,7 +99,7 @@ Geofence & Biometric gate movement logs.
 - `expected_return_time` (TEXT)
 - `leave_pass_id` (UUID, Foreign Key referencing `pass_requests.id`)
 - `status` (TEXT, default `'AUTHORIZED'`)
-- `method` (TEXT, default `'Geofence + Biometric AI'`)
+- `method` (TEXT, default `'Geofence + Biometric AI'`, or `'Warden Emergency Override'`)
 - `created_at` (TIMESTAMP)
 
 ### Table 5: `public.face_embeddings`
@@ -104,6 +108,12 @@ Registered student facial feature embedding vectors for DeepFace match verificat
 - `user_id` (UUID)
 - `registration_number` (TEXT)
 - `embedding` (TEXT / JSON)
+
+### Table 6: `public.system_settings`
+Global system configurations including dynamic curfew settings.
+- `id` (UUID, Primary Key)
+- `key` (TEXT, Unique, e.g. `'curfew_config'`)
+- `value` (JSONB / JSON, e.g. `{ "startHour": 17, "endHour": 8, "warningMins": 60 }`)
 
 ---
 
@@ -219,6 +229,20 @@ DROP POLICY IF EXISTS "Public Read Attendance Logs" ON public.attendance_logs;
 DROP POLICY IF EXISTS "Public Insert Attendance Logs" ON public.attendance_logs;
 CREATE POLICY "Public Read Attendance Logs" ON public.attendance_logs FOR SELECT USING (true);
 CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSERT WITH CHECK (true);
+
+-- 5. System Settings Table (Dynamic Curfew Config)
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,
+    value JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read System Settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Public Upsert System Settings" ON public.system_settings;
+CREATE POLICY "Public Read System Settings" ON public.system_settings FOR SELECT USING (true);
+CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL USING (true);
 ```
 
 ---
@@ -227,9 +251,9 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 
 | Method | Route | Description |
 | :--- | :--- | :--- |
-| `POST` | `/location-status` | Accepts `{ lat, lng, bypass_geofence }` and returns Haversine distance to IUST campus (inside: true/false). |
+| `POST` | `/location-status` | Accepts `{ lat, lng, bypass_geofence }` and returns Haversine distance to campus geofence (inside: true/false). |
 | `POST` | `/enroll-face` | Accepts `{ user_id, registration_number, image }`, extracts face embeddings, stores vector in `face_embeddings`. |
-| `POST` | `/verify-face` | Accepts captured webcam image & landmarks, compares embedding against registered profile, returns match status. |
+| `POST` | `/verify-face` | Accepts captured webcam image & landmarks, checks curfew guardrail (supports `bypass_curfew`), compares embedding, returns match status. |
 | `POST` | `/log-attendance` | Saves gate scan to `attendance_logs` (`type`, `exit_type`, `expected_return_time`, `leave_pass_id`). |
 | `POST` | `/create-pass-request` | Pulls official parent details from `university_details`, generates 256-bit token, saves pass request, sends Twilio SMS. |
 | `POST` | `/api/parent/verify-token` | Validates token/link existence, single-use state, 24h expiry, and returns masked parent phone number. |
@@ -242,120 +266,73 @@ CREATE POLICY "Public Insert Attendance Logs" ON public.attendance_logs FOR INSE
 
 ## 6. System Features & Workflows
 
-### A. Secure Parent Pass & 2FA OTP Request Flow
+### A. Dynamic Curfew Engine & Custom Gate Controls
+1. **Dynamic Curfew Config Module (`curfewConfig.js`)**:
+   - Centralized management of `startHour` (e.g. 5:00 PM), `endHour` (e.g. 8:00 AM), and `warningMins` (e.g. 60 mins).
+   - Synchronizes between `localStorage` and Supabase `public.system_settings`.
+2. **Admin Dashboard Control Panel (`AdminDashboard.jsx`)**:
+   - **`⚙️ Curfew Config`** button opens interactive modal.
+   - Admins can set custom curfew start times (4:00 PM – 11:00 PM), end times (5:00 AM – 9:00 AM), and warning lead times.
+3. **Strict Bidirectional Curfew Lockouts**:
+   - During curfew hours, **both** campus Exits (Normal & Home Exit) AND Hostel Entry scans are locked (`🔒 Gate Closed`).
+   - UI badges, return deadlines, and alert banners update in real-time across student and admin dashboards.
+
+### B. Pre-Curfew Warning & Overdue Alert Banners
+1. **Pre-Curfew Warning Banner**:
+   - Triggered when a student is marked `OUT` during the pre-curfew window (e.g., 60 minutes before curfew).
+   - Displays an animated amber alert (`⏰ URGENT CURFEW ALERT: Gate Closing Soon!`) with live countdown minutes.
+2. **Active Curfew Overdue Banner**:
+   - Replaces warning if student is marked `OUT` during active curfew hours (`🔒 CURFEW ACTIVE: GATE CLOSED`).
+
+### C. Exclusive Admin Emergency Authorization System
+1. **Warden Emergency Entry Clearance (Admin Dashboard)**:
+   - In the **Outside After Curfew** modal on `/admin-dashboard`, wardens click **"Authorize Entry"** to log an emergency entry scan with method `Warden Emergency Override`, instantly clearing the student.
+2. **Warden Emergency Exit Clearance (Admin Dashboard)**:
+   - In the **Inside Premises** modal on `/admin-dashboard`, wardens click **"Authorize Exit"** to log an emergency exit scan for students requiring emergency outbound movement during curfew.
+3. **Student Portal Protocol (Student Device)**:
+   - All student-side PIN input options have been removed for maximum security. During curfew, students see a clear alert directing them to report to the Hostel Warden Office for authorization.
+4. **Backend API Bypass (`bypass_curfew`)**:
+   - `/verify-face` accepts `"bypass_curfew": true` in POST payload to override curfew checks for warden APIs.
+
+### D. Secure Parent Pass & 2FA OTP Request Flow
 1. **Creation (`POST /create-pass-request`)**:
    - Student submits pass request on `/pass-requests`.
-   - Backend automatically queries `public.university_details` by `registration_number` to pull official `parent_name` & `parent_phone`. (Students cannot enter or change the parent number).
+   - Backend automatically queries `public.university_details` by `registration_number` to pull official `parent_name` & `parent_phone`.
    - Generates cryptographically secure single-use 24-hour token (`secrets.token_urlsafe(32)`).
-   - Delivers link via Twilio SMS to registered parent phone number.
+   - Delivers link via Twilio SMS.
 2. **Parent OTP Authorization (`ParentApproval.jsx`)**:
-   - Parent opens `/parent-approval/<token>`.
-   - Clicks **Send Verification Code** (`POST /api/parent/send-otp`) -> sends 6-digit OTP SMS. Enforces 60s resend rate limits.
-   - Enforces max 5 failed attempts (`POST /api/parent/verify-otp`).
-   - Upon verification, parent approves or rejects (`POST /api/parent/submit-decision`).
-   - Token & OTP are immediately invalidated upon submission.
+   - Parent opens `/parent-approval/<token>` -> requests 6-digit OTP SMS -> verifies OTP -> approves or rejects request.
 3. **Warden / Admin Final Pass Approval (`AdminPasses.jsx`)**:
-   - Once parent approves (`PENDING_ADMIN`), warden / admin reviews and grants final approval (`APPROVED`).
+   - Admin grants final approval (`APPROVED`).
 
-### B. Split Exit & Entry Movement Control
-1. **Enter into Hostel**:
-   - Inbound gate scan with Geofence GPS + Biometric AI.
-   - If student is already marked `IN HOSTEL` (`isInside === true`), the system displays an alert banner ("Already Marked Inside Hostel") preventing duplicate active entries until an exit is logged.
-2. **Normal Exit**:
-   - Local outings during standard hours.
-   - Requires student status = `IN HOSTEL`. If already marked `OUT` (`isInside === false`), displays an alert banner ("Multiple Active Exits Prevented").
-   - Logs `attendance_logs` with `type = 'Exit (Normal)'`, `exit_type = 'NORMAL_EXIT'`, `expected_return_time = 'Same Day Outing'`.
-3. **Exit to Home**:
-   - Weekend / Home leave.
-   - Requires student status = `IN HOSTEL`. If already marked `OUT`, displays an alert banner ("Multiple Active Exits Prevented").
-   - System checks `public.pass_requests` for an `APPROVED` pass for this student. If missing/unapproved, exit is blocked with an alert banner ("Approved Leave Pass Required").
-   - Logs `attendance_logs` with `type = 'Exit (Leave to Home)'`, `exit_type = 'LEAVE_TO_HOME'`, `expected_return_time = '${return_date} at ${return_time}'`.
+### E. Split Exit & Entry Movement Control
+1. **Enter into Hostel**: Return scan with Geofence GPS + Biometric AI. Prevents duplicate entries.
+2. **Normal Exit**: Local outings during standard non-curfew hours.
+3. **Exit to Home**: Requires approved Leave Pass and non-curfew hours.
 
-### C. Dedicated Student Onboarding Portal (`AdminOnboarding.jsx`)
-1. **Registration Integration (`Signup.jsx`)**:
-   - New students register with Name, Email, Password, Registration Number, and Phone.
-   - The initial profile starts with `status = 'PENDING'` and `parent_name = null`, `parent_phone = null`.
-2. **Onboarding Roster (`AdminOnboarding.jsx`)**:
-   - Dedicated page at `/admin-onboarding`.
-   - Features tabbed navigation: **Pending Setup**, **Completed Profiles**, and **All Students**.
-   - Admins open the **Complete / Edit Profile** modal to assign:
-     - `reg_id` (Registration ID)
-     - `parent_name` & `parent_phone`
-     - `hostel_name`, `room_number`, `floor`, and `warden_name`
-   - On save, updates `public.students` (`status = 'ACTIVE'`, `registration_number`) and upserts `public.university_details`.
-   - **Cascade Synchronization**: If `registration_number` is changed by the admin, the system automatically updates linked records across `public.face_embeddings`, `public.pass_requests`, and `public.attendance_logs` by `user_id` so facial biometrics, gate movement logs, and pass histories stay linked.
-   - Cleans up old unassigned records so the student transitions cleanly to **Completed Profiles**.
+### F. Dedicated Student Onboarding Portal (`AdminOnboarding.jsx`)
+- Admins onboard new pending students by completing hostel assignment, parent contacts, and registration IDs.
+- **Cascade Sync**: Automatically updates linked records across `face_embeddings`, `pass_requests`, and `attendance_logs`.
 
-### D. Layout & Metric Distribution Across Admin Pages
-- **Campus Safety Dashboard ([AdminDashboard.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminDashboard.jsx))**:
-  - Focuses on real-time presence & movement audit: **Inside Premises**, **Outside Premises**, and **Students Outside After 5 PM** real-time KPI metrics.
-  - Includes direct navigation shortcut button to **Student Onboarding** and interactive **Overdue Report Modal**.
-- **Student Directory ([StudentDirectory.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/StudentDirectory.jsx))**:
-  - Displays roster management statistics with skeleton pulse loading: **Total Registered Students**, **Fully Onboarded**, and **Face Biometrics Active**.
-- **Student Onboarding Portal ([AdminOnboarding.jsx](file:///c:/Users/91903/Desktop/Coding/IntelliSentry/client/src/pages/AdminOnboarding.jsx))**:
-  - Focuses on interactive student setup and profile completion.
-
-### E. Return Deadline & Hostel Gate Closed System (5:00 PM - 8:00 AM)
-1. **Hostel Gate Closed Rules (5:00 PM to 8:00 AM)**:
-   - Standard campus outing hours are **8:00 AM to 5:00 PM**.
-   - Between **5:00 PM and 8:00 AM**, new campus exits (**Normal Exit** and **Exit to Home**) are disabled/locked (`🔒 Gate Closed (5 PM - 8 AM)`).
-   - If a student attempts to log an exit outside standard hours, the system blocks the exit and displays an alert notice (*"Hostel Gate Closed (5:00 PM - 8:00 AM): New campus exits are disabled after the 5:00 PM deadline until 8:00 AM tomorrow morning"*).
-   - Inbound **Enter into Hostel** scans remain 100% enabled at all hours so overdue or returning students can check back in safely.
-2. **Student Dashboard Return Alerts (For Students Outside Campus)**:
-   - **30-Minute Warning Alert (4:30 PM - 5:00 PM)**: Minimal amber reminder banner displayed when a student is marked **Outside Campus** within 30 minutes of the 5:00 PM return deadline. Displays remaining countdown minutes.
-   - **High-Priority Overdue Alert (After 5:00 PM)**: Minimal rose alert banner replacing the warning if the student has not checked back in by 5:00 PM. Displays live **Overdue Duration** (e.g. `1 hr 15 mins overdue`).
-   - **Auto-Clearing**: Clears automatically when the student completes their gate entry scan.
-3. **Admin Dashboard Real-time KPI & Overdue Report Modal**:
-   - **"Students Outside After 5 PM" KPI Card**: Real-time metric card showing the count of overdue students.
-   - **Interactive Overdue Report Modal (`max-w-4xl`)**: Opens on clicking the KPI card. Displays a full breakdown table with:
-     - Student Name (with initial avatar and housing room info)
-     - Roll Number (Registration Number)
-     - Checkout Time (Formatted exit timestamp)
-     - Expected Return Time (5:00 PM)
-     - Overdue Duration (Formatted duration pill, `whitespace-nowrap min-w-[160px]` preventing text clipping)
-   - Includes real-time search filtering within the modal.
-
-### F. Mobile Responsive Architecture & Bottom Navigation Bar
-1. **Dual-Mode Navigation Frame (`Sidebar.jsx` & `Layout.jsx`)**:
-   - **Desktop View (`>= 768px`)**: Left-aligned fixed vertical sidebar (`md:fixed md:top-0 md:bottom-0 md:left-0 md:w-64 md:z-30`) with official logo, menu links with live badge counts, and user profile footer. Main area offset using `md:pl-64`.
-   - **Mobile View (`< 768px`)**: Fixed bottom navigation bar (`fixed bottom-0 left-0 right-0 z-50 h-16 bg-white/95 backdrop-blur-md border-t shadow-lg`) displaying 5 clean icon tabs for students:
-     - `Home` (`/studentportal`)
-     - `Passes` (`/pass-requests`)
-     - `Logs` (`/activity-logs`)
-     - `Profile` (`/profile`)
-     - `Help` (`/help`)
-2. **Mobile Header Topbar**:
-   - Topbar in `Layout.jsx` displays IntelliSentry logo and branding on the left for mobile viewports, with a compact Logout button on the right.
-3. **Main Content Padding & Overflow Protection**:
-   - Added `pb-24` on mobile main container so scrollable page content, cards, and buttons never get covered by the 64px fixed bottom navbar.
-   - Added `w-full max-w-full overflow-x-hidden` on main containers and `overflow-x-auto min-w-[700px]` on all data tables across `AdminDashboard`, `AdminPasses`, `AdminOnboarding`, `StudentDirectory`, `PassRequests`, and `ActivityLogs`.
-
-### G. Auth Session & Profile Query Stability (`maybeSingle()`)
-1. **Graceful Single Row Query handling**:
-   - Updated `.single()` queries to `.maybeSingle()` across `ProtectedRoute.jsx`, `Profile.jsx`, `Sidebar.jsx`, and `Layout.jsx`.
-2. **Preventing Erroneous Signouts**:
-   - Resolved issue where accounts (like Administrators or newly created students without a `students` table row) caused query exceptions (`PGRST116`), which previously triggered `setIsAuthenticated(false)` and forced an unexpected logout/redirect to `/` upon visiting `/profile`.
+### G. Render Cloud Deployment Readiness
+- Backend includes `opencv-python-headless` (prevents `libGL.so.1` Linux load crashes).
+- Port binding uses `port = int(os.environ.get("PORT", 5000))`.
+- Start Command: `gunicorn --bind 0.0.0.0:$PORT app:app`.
 
 ---
 
 ## 7. Key Source Code Files
 
-- **`server/app.py`**: Flask server API endpoints.
-- **`server/haversine_check.py`**: GPS distance calculation module (IUST campus coordinates).
-- **`server/face_service.py`**: DeepFace / OpenCV facial feature extraction & Supabase embedding vector handling.
-- **`server/sms_service.py`**: Twilio SMS notification & OTP sending functions.
-- **`server/test_parent_flow.py`**: Automated end-to-end Python test script.
-- **`client/src/components/Sidebar.jsx`**: Dual-mode navigation component (fixed left sidebar on desktop, fixed 5-tab bottom navigation bar on mobile for students).
-- **`client/src/components/Layout.jsx`**: Responsive layout frame with `md:pl-64` desktop offset, mobile header topbar, and `pb-24` main content wrapper.
-- **`client/src/components/ProtectedRoute.jsx`**: Route guard using `maybeSingle()` and auth session retention to prevent accidental logouts.
-- **`client/src/pages/StudentDashboard.jsx`**: Student portal with movement action cards (**Enter into Hostel**, **Normal Exit**, **Exit to Home**), skeleton loading placeholders, strict bidirectional movement state guards, 5:00 PM Return Deadline Alert System, and Supabase Realtime sync.
-- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal with live campus location metrics (**Inside Premises**, **Outside Premises**, **Students Outside After 5 PM** KPI card), interactive Overdue Report Modal (`max-w-4xl`), Supabase Realtime sync, and CSV exporter.
-- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal, cascade ID sync, and tabbed roster filters.
-- **`client/src/pages/StudentDirectory.jsx`**: Master student directory with skeleton pulse loading and roster metrics.
-- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page featuring tabbed navigation, multi-request prevention, biometric return verification, and cancellation options.
-- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal featuring tabbed segregation and strict audit compliance.
-- **`client/src/pages/ActivityLogs.jsx`**: Personal student audit history with date range filtering.
-- **`client/src/pages/Profile.jsx`**: Student/Admin face biometric registration & profile details page with resilient `maybeSingle()` queries.
+- **`server/app.py`**: Flask server API endpoints & Render deployment port binding.
+- **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
+- **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module.
+- **`client/src/pages/StudentDashboard.jsx`**: Student portal with dynamic curfew locks, warning banners, movement cards, and Warden Contact Info modal.
+- **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal with **`⚙️ Curfew Config`** modal, overdue student tracking, Warden Authorize Entry/Exit clearance buttons, and CSV exporter.
+- **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal and cascade ID sync.
+- **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page with biometric return auto-completion.
+- **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal.
+- **`client/src/components/VerificationModal.jsx`**: Geofence GPS + Biometric camera verification modal.
+- **`client/src/components/Sidebar.jsx`**: Dual-mode desktop sidebar & mobile 5-tab bottom navigation bar.
 
 ---
 
