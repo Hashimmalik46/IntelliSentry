@@ -494,41 +494,47 @@ const StudentDashboard = () => {
         )}
 
         {!isInside && (deadlineInfo.status === 'OVERDUE' || checkNightCurfew()) && (
-          <div className="bg-rose-500/10 border-2 border-rose-500/40 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-body shadow-sm">
+          <div className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-body shadow-sm border-2 ${checkNightCurfew() ? 'bg-rose-500/10 border-rose-500/40' : 'bg-amber-500/10 border-amber-500/40'}`}>
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-xs text-white ${checkNightCurfew() ? 'bg-rose-600' : 'bg-amber-600'}`}>
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-xs font-black text-rose-950 font-heading uppercase tracking-wider">
-                    🔒 CURFEW ACTIVE: GATE CLOSED
+                  <h4 className={`text-xs font-black font-heading uppercase tracking-wider ${checkNightCurfew() ? 'text-rose-950' : 'text-amber-950'}`}>
+                    {checkNightCurfew() ? '🔒 CURFEW ACTIVE: GATE CLOSED' : '⚠️ OVERDUE CAMPUS RETURN ALERT'}
                   </h4>
-                  <span className="px-2.5 py-0.5 bg-rose-600 text-white text-[11px] font-extrabold font-mono rounded-full">
+                  <span className={`px-2.5 py-0.5 text-white text-[11px] font-extrabold font-mono rounded-full ${checkNightCurfew() ? 'bg-rose-600' : 'bg-amber-600'}`}>
                     {deadlineInfo.overdueDuration ? `Overdue by ${deadlineInfo.overdueDuration}` : '5:00 PM - 8:00 AM Curfew'}
                   </span>
                 </div>
-                <p className="text-xs font-medium text-rose-900 mt-1">
-                  You are currently marked <strong className="font-bold underline">Outside Campus</strong> during curfew hours. Gate entry and exit are strictly disabled after 5:00 PM until 8:00 AM.
+                <p className={`text-xs font-medium mt-1 ${checkNightCurfew() ? 'text-rose-900' : 'text-amber-900'}`}>
+                  {checkNightCurfew() 
+                    ? 'You are currently marked Outside Campus during curfew hours. Gate entry and exit are strictly disabled after 5:00 PM until 8:00 AM.'
+                    : 'You are currently marked Outside Campus past your return deadline. Please perform return check-in at the hostel gate immediately.'}
                 </p>
-                <div className="mt-2 text-xs font-semibold text-rose-950 bg-rose-100/90 border border-rose-200 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 font-heading">
-                  <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
-                  <span>ℹ️ Please report to the Hostel Warden Office for emergency clearance authorization.</span>
-                </div>
+                {checkNightCurfew() && (
+                  <div className="mt-2 text-xs font-semibold text-rose-950 bg-rose-100/90 border border-rose-200 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 font-heading">
+                    <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
+                    <span>ℹ️ Please report to the Hostel Warden Office for emergency clearance authorization.</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowWardenInfoModal(true)}
-                className="w-full sm:w-auto px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer font-heading"
-              >
-                <ShieldAlert className="w-4 h-4 text-amber-400" /> Contact Warden Info
-              </button>
+              {checkNightCurfew() && (
+                <button
+                  onClick={() => setShowWardenInfoModal(true)}
+                  className="w-full sm:w-auto px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer font-heading"
+                >
+                  <ShieldAlert className="w-4 h-4 text-amber-400" /> Contact Warden Info
+                </button>
+              )}
               <button
                 onClick={handleEntryClick}
-                className="w-full sm:w-auto px-3.5 py-2 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer font-heading uppercase tracking-wide"
+                className={`w-full sm:w-auto px-3.5 py-2 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer font-heading uppercase tracking-wide ${checkNightCurfew() ? 'bg-rose-700 hover:bg-rose-800' : 'bg-amber-600 hover:bg-amber-700'}`}
               >
-                <ArrowDownLeft className="w-4 h-4" /> Check In Status
+                <ArrowDownLeft className="w-4 h-4" /> Check In Now
               </button>
             </div>
           </div>

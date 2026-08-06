@@ -110,8 +110,9 @@ def verify_face():
     if not image:
         return jsonify({"error": "image is required"}), 400
 
-    # Backend curfew guardrail (5:00 PM - 8:00 AM)
-    current_hour = datetime.now().hour
+    # Backend curfew guardrail (5:00 PM - 8:00 AM IST)
+    ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    current_hour = ist_now.hour
     if (current_hour >= 17 or current_hour < 8) and not bypass_curfew:
         return jsonify({
             "verified": False,
@@ -584,4 +585,4 @@ def delete_pass_request_endpoint(request_id):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
