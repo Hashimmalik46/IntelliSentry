@@ -359,23 +359,36 @@ CREATE POLICY "Public Upsert Face Embeddings" ON public.face_embeddings FOR ALL 
 - **SPA 404 Refresh Fix**: Includes `client/public/_redirects` (`/* /index.html 200`) and `client/vercel.json` to prevent 404 errors on page refresh for deployed React router URLs (Render, Netlify, Vercel).
 
 ### H. Multi-Tier Facial Recognition AI Pipeline & 3-Tier Anti-Spoofing Engine
-1. **Multi-Engine Hierarchy & Dynamic Router (`face_service.py`)**:
-   - **Primary Engine (`custom_arcface`)**: Custom PyTorch deep learning architecture (`FaceEmbeddingNet` with ResNet-50 backbone) outputting 512-dimensional L2-normalized feature vectors. Loaded via CPU/GPU weights at `server/weights/intelliface.pth`.
-   - **Secondary Engine (`deepface_arcface`)**: DeepFace ArcFace representation engine (512-D vectors) serving as standard production fallback.
-   - **Tertiary Engine (`geometric_15d`)**: 68-landmark geometric facial ratio extractor computing 15 normalized facial proportion ratios (inter-ocular distance, nose-to-chin ratio, eyebrow spacing, etc.).
-   - **Quaternary Engine (`histogram_15d`)**: 15-D color texture histogram extraction fallback.
-2. **Enhanced 3-Tier Anti-Spoofing Security Defense**:
+1. **IntelliFace Custom ArcFace Model Architecture & Training Specs (`intelliface.pth`)**:
+   - **Backbone Architecture**: ResNet-50 convolutional neural network with custom bottleneck projection (`Linear(in_features=2048, out_features=512) -> BatchNorm1d(512) -> F.normalize(p=2)`), outputting 512-dimensional $L_2$-normalized embeddings on a unit hypersphere.
+   - **Training Dataset**: Trained on **VGGFace2** (`hearfool/vggface2` via KaggleHub) featuring **8,631 unique identities** at canonical $112 \times 112$ pixel input resolution.
+   - **Preprocessing & Data Loader**: `Resize((112, 112))`, `RandomHorizontalFlip(p=0.5)`, normalized to range $[-1.0, 1.0]$ (`mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]`), `batch_size=128`, `workers=2`, `pin_memory=True`.
+   - **Loss Function & Metric Head**: ArcFace (Additive Angular Margin Loss, $s=64.0, m=0.5$) + `nn.CrossEntropyLoss()`.
+   - **Numerical Stability Safeguards**: ArcCosine logit clamping (`.clamp(-1.0 + 1e-7, 1.0 - 1e-7)`), gradient unscaling (`scaler.unscale_()`), and gradient clipping (`max_norm=5.0`).
+   - **Hyperparameters**: SGD optimizer (Learning Rate = **0.01**, Momentum = **0.9**, Weight Decay = **$5 \times 10^{-4}$**), `CosineAnnealingLR` scheduler ($T_{\max}=10$), CUDA Automatic Mixed Precision (`torch.amp.autocast('cuda')`), 10 training epochs.
+   - **Empirical Evaluation Benchmarks**:
+     - **Pairwise Verification Accuracy**: **99.80%** (at decision threshold 0.35).
+     - **Top-1 Classification Accuracy**: **97.42%** (**1,247 out of 1,280** correct predictions).
+     - **Final Average Training Loss**: **0.2854** (converged from initial loss $>12.0$).
+     - **Same-Identity Cosine Score**: **0.9875** (intra-class clustering $\approx 1.0$).
+     - **Deployment Model Artifact**: Saved at `server/weights/intelliface.pth`.
+
+2. **Multi-Engine Hierarchy & Dynamic Router (`face_service.py`)**:
+   - **Primary Engine (`custom_arcface`)**: IntelliFace PyTorch ResNet-50 ArcFace model (512-D $L_2$-normalized vector, threshold **0.40**).
+   - **Secondary Engine (`deepface_arcface`)**: DeepFace ArcFace representation engine (512-D vector, threshold **0.45**).
+   - **Tertiary Engine (`geometric_15d`)**: 68-landmark geometric facial ratio extractor computing 15 normalized facial proportion ratios (threshold **0.80**).
+   - **Quaternary Engine (`histogram_15d`)**: 15-D color texture histogram extraction fallback (threshold **0.85**).
+
+3. **Enhanced 3-Tier Anti-Spoofing Security Defense**:
    - **Tier 1 (Laplacian Variance Check)**: Measures image edge variance to detect blurry photo printouts or static printed photographs (`variance < 15.0`).
    - **Tier 2 (HSV Saturation Analysis)**: Evaluates the mean S-channel value to detect monochromatic black-and-white printouts (`saturation < 5.0`).
    - **Tier 3 (2D FFT Frequency Spectrum Analysis)**: Applies Fast Fourier Transform frequency shift analysis to detect moiré patterns, screen pixels, and digital screen glare (`magnitude_spectrum > 175.0`).
-3. **Tier-Aware Cosine Similarity Matcher & Dynamic Thresholds**:
-   - Cosine similarity matching (`cosine_similarity(v1, v2)`) with engine-specific thresholds:
-     - `custom_arcface`: **0.40** (40% match threshold)
-     - `deepface_arcface`: **0.45** (45% match threshold)
-     - `geometric_15d`: **0.80** (80% match threshold)
-     - `histogram_15d`: **0.85** (85% match threshold)
+
+4. **Tier-Aware Cosine Similarity Matcher & Vector Dimensionality Guard**:
+   - Cosine similarity matching (`cosine_similarity(v1, v2)`) with engine-specific dynamic thresholds.
    - **Vector Dimensionality Guard**: Prevents dimensional mismatch comparison crashes between 512-D deep embeddings and 15-D legacy fallbacks.
-4. **Strict User-Specific Biometric Matching**:
+
+5. **Strict User-Specific Biometric Matching**:
    - Verification endpoint (`/verify-face`) strictly checks the captured face vector against the target `user_id` or `registration_number` stored in Supabase `public.face_embeddings`. Returns clear status messages (`"Biometric face match verified via custom_arcface! Confidence: 94.2%"`).
 
 ### I. Dual Geofence GPS Radial & Point-in-Polygon (PIP) Verification Engine
