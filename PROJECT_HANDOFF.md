@@ -275,10 +275,12 @@ CREATE POLICY "Public Upsert Face Embeddings" ON public.face_embeddings FOR ALL 
 
 | Method | Route | Description |
 | :--- | :--- | :--- |
-| `POST` | `/location-status` | Accepts `{ lat, lng, bypass_geofence }` and returns Haversine distance to campus geofence (inside: true/false). |
-| `POST` | `/enroll-face` | Accepts `{ user_id, registration_number, image }`, extracts face embeddings, stores vector in `face_embeddings`. |
+| `GET` | `/` | Server health check endpoint returning `"IntelliSentry Flask Server running OK"`. |
+| `POST` | `/location-status` | Accepts `{ lat, lng, bypass_geofence }` and returns Haversine distance & PIP status to campus geofence. |
+| `POST` | `/enroll-face` | Accepts `{ user_id, student_name, registration_number, image, landmarks, engine_preference }`, extracts face embeddings, stores vector in `face_embeddings`. |
 | `POST` | `/verify-face` | Accepts captured webcam image & landmarks, checks curfew guardrail (supports `bypass_curfew`), compares embedding, returns match status. |
-| `POST` | `/log-attendance` | Saves gate scan to `attendance_logs` (`type`, `exit_type`, `expected_return_time`, `leave_pass_id`). |
+| `POST` | `/log-attendance` | Saves gate scan to `attendance_logs` (`type`, `exit_type`, `expected_return_time`, `leave_pass_id`, `status`, `method`). |
+| `POST` | `/send-parent-sms` | Accepts `{ parent_phone, student_name, leave_type, approval_url }` and dispatches parent SMS notification via Twilio. |
 | `POST` | `/create-pass-request` | Pulls official parent details from `university_details`, generates 256-bit token, saves pass request, sends Twilio SMS. |
 | `POST` | `/api/parent/verify-token` | Validates token/link existence, single-use state, 24h expiry, and returns masked parent phone number. |
 | `POST` | `/api/parent/send-otp` | Generates 6-digit OTP code, sets 10min expiry, sends Twilio SMS. Enforces 60-second rate limits. |
@@ -376,24 +378,63 @@ CREATE POLICY "Public Upsert Face Embeddings" ON public.face_embeddings FOR ALL 
 4. **Strict User-Specific Biometric Matching**:
    - Verification endpoint (`/verify-face`) strictly checks the captured face vector against the target `user_id` or `registration_number` stored in Supabase `public.face_embeddings`. Returns clear status messages (`"Biometric face match verified via custom_arcface! Confidence: 94.2%"`).
 
+### I. Dual Geofence GPS Radial & Point-in-Polygon (PIP) Verification Engine
+1. **Haversine Radial Distance Engine (`haversine_check.py`)**:
+   - Calculates real-time distance in meters between user GPS coordinates and campus center (`34.056423, 74.948681`). Enforces 500-meter radius threshold.
+2. **Point-in-Polygon (PIP) Ray-Casting Engine (`pip_check.py`)**:
+   - Evaluates 4-corner polygon boundary coordinates (`GEOFENCE_POLYGON_POINTS`) using Shapely / PyProj ray-casting logic to grant access when student is physically within non-circular campus contours.
+3. **Developer Location Bypass Mode**:
+   - Frontend modal (`VerificationModal.jsx`) supports `bypass_geofence: true` for testing and development overrides.
+
+### J. System Activity & Gate Movement Logs Portal (`ActivityLogs.jsx`)
+1. **Comprehensive Gate Log Audit**:
+   - Displays real-time movement history across all gate scans (`Entry`, `Normal Exit`, `Leave to Home`, `Warden Emergency Override`).
+2. **Multi-Filter & Export Tooling**:
+   - Supports filtering by movement type, date range picker, registration number query, and instant CSV data exporter for campus security reports.
+
+### K. Student Directory & Master Housing Roster (`StudentDirectory.jsx`)
+1. **Master Student Roster**:
+   - Displays all registered student profiles, assigned hostels, room numbers, floor levels, warden contacts, and parent contact numbers.
+2. **Biometric Profile Vector Badges**:
+   - Displays active biometric profile status (`Enrolled Profile Vectors ✅` vs `Not Registered ⚠️`).
+
+### L. Role-Based Route Protection & Navigation (`ProtectedRoute.jsx`, `Layout.jsx`, `Sidebar.jsx`)
+1. **Strict Role-Based Access Control**:
+   - Restricts `/admin-dashboard`, `/admin-onboarding`, `/admin-passes`, `/student-directory` strictly to users with `role === 'ADMIN'` or `'ADMINISTRATOR'`.
+   - Restricts `/student-dashboard` and `/pass-requests` strictly to users with `role === 'student'`.
+2. **Responsive Dual-Mode Navigation (`Sidebar.jsx`)**:
+   - Displays a sleek desktop sidebar on large screens and transforms into an intuitive 5-tab mobile bottom navigation bar on mobile web browsers.
+
 ---
 
 ## 7. Key Source Code Files
 
-- **`server/app.py`**: Flask server API endpoints, curfew verification routes, & Render deployment port binding.
+- **`server/app.py`**: Flask server API endpoints, curfew verification routes, parent token/OTP verification endpoints, & Render deployment port binding.
 - **`server/face_service.py`**: Multi-tier Facial Recognition AI Engine, PyTorch Custom ArcFace backbone, 3-tier Anti-Spoofing, and Supabase vector matching operations.
 - **`server/weights/intelliface.pth`**: Pre-trained PyTorch weight checkpoint for the 512-D Custom ArcFace facial recognition model.
 - **`server/sms_service.py`**: Twilio SMS & OTP notification module with E.164 phone formatting and environment sanitization.
+- **`server/haversine_check.py`**: Mathematical Haversine formula calculation module for GPS spherical distance evaluation.
+- **`server/pip_check.py`**: Point-in-Polygon (PIP) Ray-Casting algorithm module for polygon contour boundary verification.
 - **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `torch`, `torchvision`, `deepface`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
 - **`client/src/apiConfig.js`**: Centralized API Base URL configuration for Vercel/Render production environments.
-- **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module.
+- **`client/src/supabaseClient.js`**: Supabase JS client v2 database and authentication connection setup.
+- **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module for dynamic curfew synchronization.
 - **`client/src/pages/Signup.jsx`**: Student registration page with Registration ID & Email uniqueness pre-checks, case normalization, and Auth account creation.
+- **`client/src/pages/Login.jsx`**: Student & Admin authentication portal.
 - **`client/src/pages/StudentDashboard.jsx`**: Student portal with dynamic curfew locks, warning banners, movement cards, and Warden Contact Info modal.
 - **`client/src/pages/AdminDashboard.jsx`**: Master attendance audit portal with **`⚙️ Curfew Config`** modal, overdue student tracking, Warden Authorize Entry/Exit clearance buttons, and CSV exporter.
 - **`client/src/pages/AdminOnboarding.jsx`**: Dedicated Student Onboarding portal with interactive profile completion modal, Registration ID conflict validation, and cascade ID sync.
 - **`client/src/pages/PassRequests.jsx`**: Student Leave Pass management page with biometric return auto-completion.
 - **`client/src/pages/AdminPasses.jsx`**: Warden / Admin pass review portal.
-- **`client/src/components/VerificationModal.jsx`**: Geofence GPS + Biometric camera verification modal.
+- **`client/src/pages/StudentDirectory.jsx`**: Master housing directory & enrolled biometric vector roster page.
+- **`client/src/pages/ActivityLogs.jsx`**: System-wide attendance movement audit log viewer page.
+- **`client/src/pages/ParentApproval.jsx`**: Parent 2FA SMS OTP verification & pass decision portal.
+- **`client/src/pages/Profile.jsx`**: Student profile management and facial biometric registration page.
+- **`client/src/pages/Help.jsx`**: Student user guide & safety protocol documentation page.
+- **`client/src/components/Camera.jsx`**: HTML5 Canvas webcam video stream capture and facial landmark rendering component.
+- **`client/src/components/VerificationModal.jsx`**: Combined Geofence GPS location + Biometric camera verification modal component.
+- **`client/src/components/ProtectedRoute.jsx`**: Role-based access control route guard component.
+- **`client/src/components/Layout.jsx`**: Core layout wrapper component with responsive container bounds.
 - **`client/src/components/Sidebar.jsx`**: Dual-mode desktop sidebar & mobile 5-tab bottom navigation bar.
 
 ---
