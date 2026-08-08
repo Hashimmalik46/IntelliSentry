@@ -123,7 +123,7 @@ const Profile = () => {
       });
 
       const result = await res.json();
-      if (res.ok) {
+      if (res.ok && result.success !== false) {
         setEnrollStatus({ success: true, message: "Biometric face vector registered successfully!" });
         setProfileData(prev => ({ ...prev, faceEnrolled: true }));
       } else {
@@ -131,8 +131,7 @@ const Profile = () => {
       }
     } catch (err) {
       console.error("Enroll face error:", err);
-      setEnrollStatus({ success: true, message: "Biometric face profile registered successfully." });
-      setProfileData(prev => ({ ...prev, faceEnrolled: true }));
+      setEnrollStatus({ success: false, message: err.message || "Failed to connect to backend server." });
     } finally {
       setIsSaving(false);
     }

@@ -19,6 +19,7 @@ from pip_check import is_pip
 from face_service import (
     enroll_face_in_supabase,
     verify_face_against_supabase,
+    DEFAULT_FACE_ENGINE,
     SUPABASE_URL,
     SUPABASE_KEY,
     get_headers,
@@ -45,16 +46,34 @@ def location_status():
     if lat is None or lng is None:
         return jsonify({"error": "Latitude and Longitude are required"}), 400
 
-    home_lat = 34.056423
-    home_lng = 74.948681
-    HOME_RADIUS = 500  # meters
+    try:
+        home_lat = float(os.getenv("GEOFENCE_LAT", "34.056423"))
+        home_lng = float(os.getenv("GEOFENCE_LNG", "74.948681"))
+        HOME_RADIUS = float(os.getenv("GEOFENCE_RADIUS", "500"))
+    except ValueError:
+        home_lat = 34.056423
+        home_lng = 74.948681
+        HOME_RADIUS = 500.0
 
-    gps_points = [
-        {"lat": 34.056465, "lng": 74.948610},
-        {"lat": 34.056485, "lng": 74.948757},
-        {"lat": 34.056353, "lng": 74.948636},
-        {"lat": 34.056423, "lng": 74.948681},
-    ]
+    raw_polygon = os.getenv("GEOFENCE_POLYGON_POINTS")
+    if raw_polygon:
+        try:
+            gps_points = json.loads(raw_polygon)
+        except Exception as err:
+            print(f"[WARNING] Failed to parse GEOFENCE_POLYGON_POINTS from env: {err}")
+            gps_points = [
+                {"lat": 34.056465, "lng": 74.948610},
+                {"lat": 34.056485, "lng": 74.948757},
+                {"lat": 34.056353, "lng": 74.948636},
+                {"lat": 34.056423, "lng": 74.948681},
+            ]
+    else:
+        gps_points = [
+            {"lat": 34.056465, "lng": 74.948610},
+            {"lat": 34.056485, "lng": 74.948757},
+            {"lat": 34.056353, "lng": 74.948636},
+            {"lat": 34.056423, "lng": 74.948681},
+        ]
 
     distance = haversine_check(lat, lng, home_lat, home_lng)
     
@@ -80,6 +99,7 @@ def enroll_face():
     registration_number = data.get("registration_number", "N/A")
     image = data.get("image")
     landmarks = data.get("landmarks")
+    engine_preference = data.get("engine_preference") or DEFAULT_FACE_ENGINE
 
     if not user_id or not image:
         return jsonify({"error": "user_id and image are required"}), 400
@@ -90,9 +110,16 @@ def enroll_face():
             student_name, 
             registration_number, 
             image, 
-            landmarks=landmarks
+            landmarks=landmarks,
+            engine_preference=engine_preference
         )
-        return jsonify({"success": True, "result": res})
+        if "error" in res:
+            return jsonify({"error": res["error"], "success": False, "result": res}), 400
+        return jsonify({
+            "success": True, 
+            "engine_used": res.get("engine_used", engine_preference), 
+            "result": res
+        })
     except Exception as e:
         print(f"Error enrolling face: {e}")
         return jsonify({"error": str(e)}), 500
@@ -106,6 +133,7 @@ def verify_face():
     user_id = data.get("user_id")
     registration_number = data.get("registration_number")
     bypass_curfew = data.get("bypass_curfew", False)
+    engine_preference = data.get("engine_preference") or DEFAULT_FACE_ENGINE
 
     if not image:
         return jsonify({"error": "image is required"}), 400
@@ -118,6 +146,7 @@ def verify_face():
             "verified": False,
             "curfew_blocked": True,
             "confidence": 0,
+            "engine_used": engine_preference,
             "message": "CURFEW ACCESS DENIED: Hostel gate entry and exit are strictly disabled between 5:00 PM and 8:00 AM. Please contact warden for emergency clearance."
         }), 403
 
@@ -126,12 +155,18 @@ def verify_face():
             image, 
             landmarks=landmarks,
             target_user_id=user_id, 
-            registration_number=registration_number
+            registration_number=registration_number,
+            engine_preference=engine_preference
         )
         return jsonify(result)
     except Exception as e:
         print(f"Error verifying face: {e}")
-        return jsonify({"verified": False, "message": f"Verification error: {str(e)}"}), 500
+        return jsonify({
+            "verified": False, 
+            "confidence": 0,
+            "engine_used": engine_preference,
+            "message": f"Verification error: {str(e)}"
+        }), 500
 
 
 @app.route("/log-attendance", methods=["POST"])

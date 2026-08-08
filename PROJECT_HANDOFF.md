@@ -105,11 +105,14 @@ Geofence & Biometric gate movement logs.
 - `created_at` (TIMESTAMP)
 
 ### Table 5: `public.face_embeddings`
-Registered student facial feature embedding vectors for DeepFace match verification.
+Registered student facial feature embedding vectors for DeepFace / Custom ArcFace match verification.
 - `id` (UUID, Primary Key)
 - `user_id` (UUID)
+- `student_name` (TEXT)
 - `registration_number` (TEXT)
-- `embedding` (TEXT / JSON)
+- `embedding` (TEXT / JSON) -- Vector representation (512-D for ArcFace, 15-D for Geometric/Histogram fallbacks)
+- `engine_used` (TEXT) -- Model engine used (`'custom_arcface'`, `'deepface_arcface'`, `'geometric_15d'`, or `'histogram_15d'`)
+- `updated_at` (TIMESTAMP) -- Timestamp when biometric vector was last updated
 
 ### Table 6: `public.system_settings`
 Global system configurations including dynamic curfew settings.
@@ -245,6 +248,25 @@ DROP POLICY IF EXISTS "Public Read System Settings" ON public.system_settings;
 DROP POLICY IF EXISTS "Public Upsert System Settings" ON public.system_settings;
 CREATE POLICY "Public Read System Settings" ON public.system_settings FOR SELECT USING (true);
 CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL USING (true);
+
+-- 6. Face Embeddings Table (Biometric AI Vectors)
+CREATE TABLE IF NOT EXISTS public.face_embeddings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID UNIQUE NOT NULL,
+    student_name TEXT,
+    registration_number TEXT NOT NULL,
+    embedding JSONB NOT NULL,
+    engine_used TEXT DEFAULT 'custom_arcface',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.face_embeddings ADD COLUMN IF NOT EXISTS student_name TEXT;
+ALTER TABLE public.face_embeddings ADD COLUMN IF NOT EXISTS engine_used TEXT DEFAULT 'custom_arcface';
+ALTER TABLE public.face_embeddings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Face Embeddings" ON public.face_embeddings;
+DROP POLICY IF EXISTS "Public Upsert Face Embeddings" ON public.face_embeddings;
+CREATE POLICY "Public Read Face Embeddings" ON public.face_embeddings FOR SELECT USING (true);
+CREATE POLICY "Public Upsert Face Embeddings" ON public.face_embeddings FOR ALL USING (true);
 ```
 
 ---
@@ -334,13 +356,35 @@ CREATE POLICY "Public Upsert System Settings" ON public.system_settings FOR ALL 
 - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT app:app`.
 - **SPA 404 Refresh Fix**: Includes `client/public/_redirects` (`/* /index.html 200`) and `client/vercel.json` to prevent 404 errors on page refresh for deployed React router URLs (Render, Netlify, Vercel).
 
+### H. Multi-Tier Facial Recognition AI Pipeline & 3-Tier Anti-Spoofing Engine
+1. **Multi-Engine Hierarchy & Dynamic Router (`face_service.py`)**:
+   - **Primary Engine (`custom_arcface`)**: Custom PyTorch deep learning architecture (`FaceEmbeddingNet` with ResNet-50 backbone) outputting 512-dimensional L2-normalized feature vectors. Loaded via CPU/GPU weights at `server/weights/intelliface.pth`.
+   - **Secondary Engine (`deepface_arcface`)**: DeepFace ArcFace representation engine (512-D vectors) serving as standard production fallback.
+   - **Tertiary Engine (`geometric_15d`)**: 68-landmark geometric facial ratio extractor computing 15 normalized facial proportion ratios (inter-ocular distance, nose-to-chin ratio, eyebrow spacing, etc.).
+   - **Quaternary Engine (`histogram_15d`)**: 15-D color texture histogram extraction fallback.
+2. **Enhanced 3-Tier Anti-Spoofing Security Defense**:
+   - **Tier 1 (Laplacian Variance Check)**: Measures image edge variance to detect blurry photo printouts or static printed photographs (`variance < 15.0`).
+   - **Tier 2 (HSV Saturation Analysis)**: Evaluates the mean S-channel value to detect monochromatic black-and-white printouts (`saturation < 5.0`).
+   - **Tier 3 (2D FFT Frequency Spectrum Analysis)**: Applies Fast Fourier Transform frequency shift analysis to detect moiré patterns, screen pixels, and digital screen glare (`magnitude_spectrum > 175.0`).
+3. **Tier-Aware Cosine Similarity Matcher & Dynamic Thresholds**:
+   - Cosine similarity matching (`cosine_similarity(v1, v2)`) with engine-specific thresholds:
+     - `custom_arcface`: **0.40** (40% match threshold)
+     - `deepface_arcface`: **0.45** (45% match threshold)
+     - `geometric_15d`: **0.80** (80% match threshold)
+     - `histogram_15d`: **0.85** (85% match threshold)
+   - **Vector Dimensionality Guard**: Prevents dimensional mismatch comparison crashes between 512-D deep embeddings and 15-D legacy fallbacks.
+4. **Strict User-Specific Biometric Matching**:
+   - Verification endpoint (`/verify-face`) strictly checks the captured face vector against the target `user_id` or `registration_number` stored in Supabase `public.face_embeddings`. Returns clear status messages (`"Biometric face match verified via custom_arcface! Confidence: 94.2%"`).
+
 ---
 
 ## 7. Key Source Code Files
 
-- **`server/app.py`**: Flask server API endpoints & Render deployment port binding.
+- **`server/app.py`**: Flask server API endpoints, curfew verification routes, & Render deployment port binding.
+- **`server/face_service.py`**: Multi-tier Facial Recognition AI Engine, PyTorch Custom ArcFace backbone, 3-tier Anti-Spoofing, and Supabase vector matching operations.
+- **`server/weights/intelliface.pth`**: Pre-trained PyTorch weight checkpoint for the 512-D Custom ArcFace facial recognition model.
 - **`server/sms_service.py`**: Twilio SMS & OTP notification module with E.164 phone formatting and environment sanitization.
-- **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
+- **`server/requirements.txt`**: Production requirements (`opencv-python-headless`, `torch`, `torchvision`, `deepface`, `gunicorn`, `numpy`, `requests`, `twilio`, `flask`, `flask-cors`, `python-dotenv`, `pyproj`, `shapely`).
 - **`client/src/apiConfig.js`**: Centralized API Base URL configuration for Vercel/Render production environments.
 - **`client/src/utils/curfewConfig.js`**: Centralized curfew settings helper module.
 - **`client/src/pages/Signup.jsx`**: Student registration page with Registration ID & Email uniqueness pre-checks, case normalization, and Auth account creation.

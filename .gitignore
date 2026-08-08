@@ -97,3 +97,5 @@ Thumbs.db
 *.tmp
 *.bak
 *.pid
+
+server/weights/*.pth
