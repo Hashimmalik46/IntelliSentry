@@ -65,6 +65,8 @@ else:
     FaceEmbeddingNet = None
 
 WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "weights", "intelliface.pth")
+CASCADE_PATH = os.path.join(os.path.dirname(__file__), "weights", "haarcascade_frontalface_default.xml")
+
 CUSTOM_ARCFACE_AVAILABLE = False
 custom_arcface_model = None
 
@@ -77,11 +79,49 @@ if TORCH_AVAILABLE:
             model.eval()
             custom_arcface_model = model
             CUSTOM_ARCFACE_AVAILABLE = True
-            print(f"[INFO] Custom ArcFace model successfully loaded from {WEIGHTS_PATH}")
+            print(f"[INFO] Custom ArcFace backbone loaded from {WEIGHTS_PATH}")
         else:
-            print(f"[WARNING] intelliface.pth missing in server/weights/. Custom ArcFace engine disabled; falling back to DeepFace / secondary engines.")
+            print(f"[WARNING] intelliface.pth missing in server/weights/. Custom ArcFace engine disabled.")
     except Exception as e:
-        print(f"[WARNING] Failed to load Custom ArcFace weights: {e}. Custom ArcFace engine disabled.")
+        print(f"[WARNING] Failed to load Custom ArcFace weights: {e}")
+
+face_cascade = None
+if os.path.exists(CASCADE_PATH):
+    try:
+        face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+        print(f"[INFO] Haar Cascade face cropper loaded from {CASCADE_PATH}")
+    except Exception as cascade_err:
+        print(f"[WARNING] Failed to load Haar Cascade: {cascade_err}")
+
+def crop_face_region(img_or_path):
+    if isinstance(img_or_path, str):
+        img = cv2.imread(img_or_path)
+    else:
+        img = img_or_path
+
+    if img is None:
+        return img
+
+    if face_cascade and not face_cascade.empty():
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(40, 40))
+        if len(faces) > 0:
+            faces = sorted(faces, key=lambda b: b[2] * b[3], reverse=True)
+            x, y, w, h = faces[0]
+            mx, my = int(w * 0.10), int(h * 0.10)
+            x1 = max(0, x - mx)
+            y1 = max(0, y - my)
+            x2 = min(img.shape[1], x + w + mx)
+            y2 = min(img.shape[0], y + h + my)
+            return img[y1:y2, x1:x2]
+
+    # Fallback face oval crop
+    h, w = img.shape[:2]
+    crop_w = int(w * 0.70)
+    crop_h = int(h * 0.85)
+    crop_x = max(0, int((w - crop_w) / 2))
+    crop_y = max(0, int((h - crop_h) / 2))
+    return img[crop_y:crop_y + crop_h, crop_x:crop_x + crop_w]
 
 def decode_base64_image(base64_str):
     if "," in base64_str:
@@ -198,27 +238,63 @@ def compute_histogram_embedding(target_path):
         return hist[:15].tolist()
     return [0.1] * 15
 
-def compute_custom_arcface_embedding(target_path):
-    if not CUSTOM_ARCFACE_AVAILABLE or custom_arcface_model is None:
-        raise RuntimeError("Custom ArcFace model is not loaded.")
+def extract_hog_descriptor(img_crop):
+    try:
+        gray = cv2.cvtColor(img_crop, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (128, 128))
+        eq = cv2.equalizeHist(resized)
+        hog = cv2.HOGDescriptor((128, 128), (32, 32), (16, 16), (16, 16), 9)
+        feats = hog.compute(eq).flatten()
+        norm = np.linalg.norm(feats)
+        if norm > 0:
+            feats = feats / norm
+        return feats
+    except Exception as hog_err:
+        print(f"[WARNING] HOG descriptor computation error: {hog_err}")
+        return np.zeros(1764, dtype=np.float64)
 
+def compute_custom_arcface_embedding(target_path, landmarks=None):
     img = cv2.imread(str(target_path))
     if img is None:
         raise ValueError("Invalid image file for Custom ArcFace")
 
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_resized = cv2.resize(img_rgb, (224, 224))
-    img_tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+    crop = crop_face_region(img)
+    hog_feats = extract_hog_descriptor(crop)
 
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-    img_tensor = (img_tensor - mean) / std
-    img_tensor = img_tensor.unsqueeze(0)
+    resnet_feats = None
+    if TORCH_AVAILABLE and custom_arcface_model is not None:
+        try:
+            img_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+            img_resized = cv2.resize(img_rgb, (112, 112))
+            img_tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+            img_tensor = (img_tensor - mean) / std
+            img_tensor = img_tensor.unsqueeze(0)
 
-    with torch.no_grad():
-        emb = custom_arcface_model(img_tensor)
+            with torch.no_grad():
+                if hasattr(custom_arcface_model, "backbone"):
+                    raw_emb = custom_arcface_model.backbone(img_tensor)
+                else:
+                    raw_emb = custom_arcface_model(img_tensor)
+                raw_emb = F.normalize(raw_emb, p=2, dim=1)
+                resnet_feats = raw_emb[0].cpu().numpy()
+        except Exception as torch_err:
+            print(f"[WARNING] ResNet backbone feature extraction notice: {torch_err}")
 
-    return [float(x) for x in emb[0].cpu().numpy()]
+    lm_feats = compute_geometric_landmarks_embedding(landmarks)
+
+    components = [hog_feats * 0.50]
+    if resnet_feats is not None:
+        components.append(resnet_feats * 0.35)
+    components.append(np.array(lm_feats, dtype=np.float64) * 0.15)
+
+    combined = np.concatenate(components)
+    norm = np.linalg.norm(combined)
+    if norm > 0:
+        combined = combined / norm
+
+    return [float(x) for x in combined]
 
 # ==============================================================================
 # 4. Multi-Engine Router (compute_embedding)
@@ -243,7 +319,7 @@ def compute_embedding(image_path_or_base64, landmarks=None, engine_preference=No
         if engine_preference == "custom_arcface":
             if CUSTOM_ARCFACE_AVAILABLE:
                 try:
-                    emb = compute_custom_arcface_embedding(target_path)
+                    emb = compute_custom_arcface_embedding(target_path, landmarks=landmarks)
                     return emb, "custom_arcface"
                 except Exception as custom_err:
                     print(f"[WARNING] Custom ArcFace inference failed: {custom_err}. Falling back to DeepFace ArcFace.")
@@ -287,10 +363,10 @@ def compute_embedding(image_path_or_base64, landmarks=None, engine_preference=No
 # 5. Tier-Aware Cosine Matcher & Verification
 # ==============================================================================
 ENGINE_THRESHOLDS = {
-    "custom_arcface": 0.40,
-    "deepface_arcface": 0.45,
-    "geometric_15d": 0.80,
-    "histogram_15d": 0.85
+    "custom_arcface": 0.82,
+    "deepface_arcface": 0.68,
+    "geometric_15d": 0.982,
+    "histogram_15d": 0.95
 }
 
 def cosine_similarity(v1, v2):
@@ -458,12 +534,12 @@ def verify_face_against_supabase(base64_image, landmarks=None, target_user_id=No
             "user_id": best_match.get("user_id"),
             "student_name": best_match.get("student_name"),
             "registration_number": best_match.get("registration_number"),
-            "message": f"Biometric face match verified via {engine_used}! Confidence: {confidence}% (threshold: {int(threshold*100)}%)"
+            "message": f"Biometric face match verified! Confidence: {confidence}%"
         }
     else:
         return {
             "verified": False,
             "confidence": confidence if best_similarity > 0 else 0,
             "engine_used": engine_used,
-            "message": f"ACCESS DENIED: Captured face similarity ({confidence}%) below {engine_used} threshold ({int(threshold*100)}%)."
+            "message": f"ACCESS DENIED: Captured face similarity ({confidence}%) below verification threshold."
         }
